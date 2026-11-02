@@ -69,7 +69,7 @@ export function Limits({ codex }: { codex: RateLimit | null }) {
           </span>
           {codex.plan && <span className="muted plan">{codex.plan}</span>}
         </div>
-        <div className="meter" style={{ "--fill": `${left}%` } as React.CSSProperties}>
+        <div className="meter" style={{ "--fill": left / 100 } as React.CSSProperties}>
           <span />
         </div>
         <div className="row small">
@@ -103,7 +103,7 @@ export function Models({ usage }: { usage: Map<string, ModelUsage> }) {
             </div>
             <div
               className={`share share-${providerOf(model)}`}
-              style={{ "--fill": `${(u.tokens / total) * 100}%` } as React.CSSProperties}
+              style={{ "--fill": u.tokens / total } as React.CSSProperties}
             />
           </li>
         ))}

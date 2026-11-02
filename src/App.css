@@ -272,9 +272,10 @@ p {
   content: "";
   display: block;
   height: 100%;
-  width: var(--fill);
   border-radius: inherit;
-  transition: width 400ms ease;
+  transform: scaleX(var(--fill));
+  transform-origin: left;
+  transition: transform 400ms ease;
 }
 
 .meter span {
