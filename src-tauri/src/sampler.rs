@@ -1,0 +1,236 @@
+//! Samples running processes, finds AI coding agents, and groups each agent
+//! with the processes it started.
+
+use std::collections::HashMap;
+use std::ffi::OsStr;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use serde::Serialize;
+use sysinfo::{Pid, Process, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AgentKind {
+    Claude,
+    Codex,
+}
+
+/// One process in an agent's tree, flattened with its depth for display.
+#[derive(Debug, Clone, Serialize)]
+pub struct ProcNode {
+    pub pid: u32,
+    pub ppid: Option<u32>,
+    pub name: String,
+    pub command: String,
+    pub cpu: f32,
+    pub memory: u64,
+    pub depth: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Agent {
+    pub pid: u32,
+    pub kind: AgentKind,
+    pub cwd: Option<String>,
+    /// Sum over the agent and all its descendants. Per-core percent, so it can exceed 100.
+    pub cpu: f32,
+    /// Resident memory in bytes, summed over the tree.
+    pub memory: u64,
+    pub uptime_secs: u64,
+    pub processes: Vec<ProcNode>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Snapshot {
+    pub sampled_at_ms: u64,
+    pub agents: Vec<Agent>,
+}
+
+pub struct Sampler {
+    sys: System,
+}
+
+impl Sampler {
+    pub fn new() -> Result<Self, sysinfo::Error> {
+        Ok(Self { sys: System::new()? })
+    }
+
+    /// Refreshes process data and builds a snapshot. CPU figures are measured
+    /// since the previous call, so the first snapshot reports zero CPU.
+    pub fn sample(&mut self) -> Snapshot {
+        self.sys.refresh_processes_specifics(
+            ProcessesToUpdate::All,
+            true,
+            ProcessRefreshKind::nothing()
+                .with_cpu()
+                .with_memory()
+                .with_exe(UpdateKind::OnlyIfNotSet)
+                .with_cmd(UpdateKind::OnlyIfNotSet)
+                .with_cwd(UpdateKind::OnlyIfNotSet),
+        );
+        build_snapshot(&self.sys)
+    }
+}
+
+fn build_snapshot(sys: &System) -> Snapshot {
+    let procs = sys.processes();
+
+    let mut children: HashMap<Pid, Vec<Pid>> = HashMap::new();
+    for (pid, p) in procs {
+        if let Some(parent) = p.parent() {
+            children.entry(parent).or_default().push(*pid);
+        }
+    }
+
+    let kinds: HashMap<Pid, AgentKind> = procs
+        .iter()
+        .filter_map(|(pid, p)| agent_kind(p).map(|k| (*pid, k)))
+        .collect();
+
+    let mut agents: Vec<Agent> = kinds
+        .iter()
+        // An agent started by another agent (e.g. a subagent) belongs to its root's tree.
+        .filter(|(pid, _)| !has_agent_ancestor(sys, **pid, &kinds))
+        .filter_map(|(pid, kind)| build_agent(sys, *pid, *kind, &children))
+        .collect();
+    agents.sort_by_key(|a| a.pid);
+
+    Snapshot {
+        sampled_at_ms: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0),
+        agents,
+    }
+}
+
+fn agent_kind(p: &Process) -> Option<AgentKind> {
+    let exe_name = p
+        .exe()
+        .and_then(|e| e.file_name())
+        .unwrap_or_else(|| p.name());
+    match exe_name.to_str() {
+        Some("claude") => return Some(AgentKind::Claude),
+        Some("codex") => return Some(AgentKind::Codex),
+        _ => {}
+    }
+
+    // npm installs run as `node .../@anthropic-ai/claude-code/cli.js`.
+    if exe_name == OsStr::new("node") {
+        let args = p.cmd();
+        if args.iter().any(|a| a.to_string_lossy().contains("@anthropic-ai/claude-code")) {
+            return Some(AgentKind::Claude);
+        }
+        if args.iter().any(|a| a.to_string_lossy().contains("@openai/codex")) {
+            return Some(AgentKind::Codex);
+        }
+    }
+    None
+}
+
+fn has_agent_ancestor(sys: &System, pid: Pid, kinds: &HashMap<Pid, AgentKind>) -> bool {
+    let mut current = sys.process(pid).and_then(|p| p.parent());
+    // Bounded walk guards against parent cycles from pid reuse.
+    for _ in 0..64 {
+        match current {
+            Some(parent) if kinds.contains_key(&parent) => return true,
+            Some(parent) => current = sys.process(parent).and_then(|p| p.parent()),
+            None => return false,
+        }
+    }
+    false
+}
+
+fn build_agent(
+    sys: &System,
+    root: Pid,
+    kind: AgentKind,
+    children: &HashMap<Pid, Vec<Pid>>,
+) -> Option<Agent> {
+    let root_proc = sys.process(root)?;
+    let mut processes = Vec::new();
+    collect_tree(sys, root, 0, children, &mut processes);
+
+    Some(Agent {
+        pid: root.as_u32(),
+        kind,
+        cwd: root_proc.cwd().map(|c| c.display().to_string()),
+        cpu: processes.iter().map(|n| n.cpu).sum(),
+        memory: processes.iter().map(|n| n.memory).sum(),
+        uptime_secs: root_proc.run_time(),
+        processes,
+    })
+}
+
+fn collect_tree(
+    sys: &System,
+    pid: Pid,
+    depth: usize,
+    children: &HashMap<Pid, Vec<Pid>>,
+    out: &mut Vec<ProcNode>,
+) {
+    if depth > 32 {
+        return;
+    }
+    let Some(p) = sys.process(pid) else { return };
+    out.push(ProcNode {
+        pid: pid.as_u32(),
+        ppid: p.parent().map(|pp| pp.as_u32()),
+        name: p.name().to_string_lossy().into_owned(),
+        command: short_command(p),
+        cpu: p.cpu_usage(),
+        memory: p.memory(),
+        depth,
+    });
+    if let Some(kids) = children.get(&pid) {
+        let mut kids = kids.clone();
+        kids.sort();
+        for kid in kids {
+            collect_tree(sys, kid, depth + 1, children, out);
+        }
+    }
+}
+
+fn short_command(p: &Process) -> String {
+    let joined = p
+        .cmd()
+        .iter()
+        .map(|a| a.to_string_lossy())
+        .collect::<Vec<_>>()
+        .join(" ");
+    const MAX: usize = 200;
+    if joined.chars().count() > MAX {
+        let truncated: String = joined.chars().take(MAX).collect();
+        format!("{truncated}…")
+    } else {
+        joined
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_enclosing_claude_code_session() {
+        // Claude Code sets CLAUDECODE=1 for the commands it runs; elsewhere there is nothing to find.
+        if std::env::var("CLAUDECODE").is_err() {
+            return;
+        }
+        let mut sampler = Sampler::new().expect("sampler");
+        sampler.sample();
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let snapshot = sampler.sample();
+
+        let me = std::process::id();
+        let agent = snapshot
+            .agents
+            .iter()
+            .find(|a| a.processes.iter().any(|p| p.pid == me))
+            .expect("this test process should sit inside a detected agent tree");
+        assert_eq!(agent.kind, AgentKind::Claude);
+        assert!(agent.memory > 0);
+        assert_eq!(agent.processes[0].pid, agent.pid);
+        assert_eq!(agent.processes[0].depth, 0);
+    }
+}

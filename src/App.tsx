@@ -1,49 +1,162 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import type { Agent, Snapshot } from "./types";
 import "./App.css";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+// 10 minutes of history at the 2-second sample interval.
+const HISTORY_LENGTH = 300;
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+const AGENT_LABELS: Record<Agent["kind"], string> = {
+  claude: "Claude Code",
+  codex: "Codex",
+};
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(0)} MB`;
+  return `${(bytes / 1024).toFixed(0)} KB`;
+}
+
+function formatUptime(secs: number): string {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${secs}s`;
+}
+
+function shortPath(path: string | null): string {
+  if (!path) return "unknown folder";
+  return path.replace(/^\/Users\/[^/]+/, "~");
+}
+
+function Sparkline({ values }: { values: number[] }) {
+  if (values.length < 2) return <svg className="sparkline" />;
+  const max = Math.max(100, ...values);
+  const step = 120 / (HISTORY_LENGTH - 1);
+  const offset = 120 - step * (values.length - 1);
+  const points = values
+    .map((v, i) => `${(offset + i * step).toFixed(1)},${(28 - (v / max) * 26).toFixed(1)}`)
+    .join(" ");
+  return (
+    <svg className="sparkline" viewBox="0 0 120 30" preserveAspectRatio="none">
+      <polyline points={points} />
+    </svg>
+  );
+}
+
+function AgentCard({ agent, history }: { agent: Agent; history: number[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const childCount = agent.processes.length - 1;
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <section className={`agent agent-${agent.kind}`}>
+      <button className="agent-header" onClick={() => setExpanded(!expanded)}>
+        <div className="agent-title">
+          <span className="agent-kind">{AGENT_LABELS[agent.kind]}</span>
+          <span className="agent-cwd">{shortPath(agent.cwd)}</span>
+        </div>
+        <Sparkline values={history} />
+        <dl className="agent-stats">
+          <div>
+            <dt>CPU</dt>
+            <dd>{agent.cpu.toFixed(0)}%</dd>
+          </div>
+          <div>
+            <dt>Memory</dt>
+            <dd>{formatBytes(agent.memory)}</dd>
+          </div>
+          <div>
+            <dt>Up</dt>
+            <dd>{formatUptime(agent.uptime_secs)}</dd>
+          </div>
+          <div>
+            <dt>Procs</dt>
+            <dd>{agent.processes.length}</dd>
+          </div>
+        </dl>
+      </button>
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
+      {expanded && (
+        <table className="proc-tree">
+          <thead>
+            <tr>
+              <th>Process</th>
+              <th>PID</th>
+              <th>CPU</th>
+              <th>Memory</th>
+            </tr>
+          </thead>
+          <tbody>
+            {agent.processes.map((p) => (
+              <tr key={p.pid} title={p.command}>
+                <td style={{ paddingLeft: `${8 + p.depth * 16}px` }}>
+                  {p.depth > 0 && <span className="tree-branch">└ </span>}
+                  {p.name}
+                </td>
+                <td className="num">{p.pid}</td>
+                <td className="num">{p.cpu.toFixed(1)}%</td>
+                <td className="num">{formatBytes(p.memory)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {!expanded && childCount > 0 && (
+        <p className="agent-hint">
+          {childCount} child process{childCount === 1 ? "" : "es"} — click to show
+        </p>
+      )}
+    </section>
+  );
+}
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
+function App() {
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [history, setHistory] = useState<Record<number, number[]>>({});
+
+  useEffect(() => {
+    const apply = (next: Snapshot) => {
+      setSnapshot(next);
+      setHistory((prev) => {
+        const updated: Record<number, number[]> = {};
+        for (const agent of next.agents) {
+          updated[agent.pid] = [...(prev[agent.pid] ?? []), agent.cpu].slice(-HISTORY_LENGTH);
+        }
+        return updated;
+      });
+    };
+
+    invoke<Snapshot | null>("latest_snapshot").then((s) => s && apply(s));
+    const unlisten = listen<Snapshot>("agents", (event) => apply(event.payload));
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  const agents = snapshot?.agents ?? [];
+  const totalCpu = agents.reduce((sum, a) => sum + a.cpu, 0);
+  const totalMemory = agents.reduce((sum, a) => sum + a.memory, 0);
+
+  return (
+    <main className="app">
+      <header className="app-header">
+        <h1>Mika</h1>
+        <p className="summary">
+          {snapshot === null
+            ? "Sampling…"
+            : `${agents.length} agent${agents.length === 1 ? "" : "s"} · ${totalCpu.toFixed(0)}% CPU · ${formatBytes(totalMemory)}`}
+        </p>
+      </header>
+
+      {snapshot !== null && agents.length === 0 && (
+        <p className="empty">No Claude Code or Codex sessions running.</p>
+      )}
+
+      {agents.map((agent) => (
+        <AgentCard key={agent.pid} agent={agent} history={history[agent.pid] ?? []} />
+      ))}
     </main>
   );
 }
