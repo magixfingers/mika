@@ -5,7 +5,6 @@ import { compact, folderName, formatCost, localDate, timeAgo, timeUntil } from "
 export type Range = "day" | "month" | "total";
 
 const RANGE_LABELS: Record<Range, string> = { day: "Today", month: "This month", total: "All time" };
-const HEATMAP_WEEKS = 26;
 
 export function providerOf(model: string): Provider {
   return model.startsWith("claude") ? "claude" : "codex";
@@ -145,37 +144,99 @@ export function Sessions({
   );
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const TREND_DAYS = 88;
+
+function dailyTotals(days: DayUsage[]): Map<string, number> {
+  return new Map(days.map((d) => [d.date, Object.values(d.models).reduce((s, m) => s + m.tokens, 0)]));
+}
+
+/** Smooth SVG path through points (Catmull-Rom converted to cubic Béziers). */
+function smoothPath(points: [number, number][]): string {
+  if (points.length < 2) return "";
+  let d = `M${points[0][0]},${points[0][1]}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const [p0, p1, p2, p3] = [points[i - 1] ?? points[i], points[i], points[i + 1], points[i + 2] ?? points[i + 1]];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += ` C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+
 export function Activity({ days }: { days: DayUsage[] }) {
-  const byDate = new Map(days.map((d) => [d.date, Object.values(d.models).reduce((s, m) => s + m.tokens, 0)]));
-  // Columns are weeks ending with the current one; rows run Sunday to Saturday.
-  const end = new Date();
-  end.setDate(end.getDate() + (6 - end.getDay()));
-  const cells: { date: string; tokens: number; future: boolean }[] = [];
-  for (let i = HEATMAP_WEEKS * 7 - 1; i >= 0; i--) {
-    const d = new Date(end);
-    d.setDate(end.getDate() - i);
+  const totals = dailyTotals(days);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Year to date: columns are weeks from the one containing Jan 1, rows run Sunday to Saturday.
+  const start = new Date(today.getFullYear(), 0, 1);
+  start.setDate(start.getDate() - start.getDay());
+  const weeks = Math.floor((today.getTime() - start.getTime()) / (7 * 86400000)) + 1;
+  const cells: { date: string; tokens: number; hidden: boolean }[] = [];
+  const monthStarts: { month: number; week: number }[] = [];
+  for (let i = 0; i < weeks * 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    if (d.getDate() === 1) monthStarts.push({ month: d.getMonth(), week: Math.floor(i / 7) });
     const date = localDate(d);
-    cells.push({ date, tokens: byDate.get(date) ?? 0, future: d > new Date() });
+    cells.push({ date, tokens: totals.get(date) ?? 0, hidden: d > today || d.getFullYear() !== today.getFullYear() });
   }
   const max = Math.max(1, ...cells.map((c) => c.tokens));
-  const active = days.filter((d) => byDate.get(d.date)! > 0).length;
+  const active = [...totals.values()].filter((t) => t > 0).length;
+
+  // Trend: one point per day over the last TREND_DAYS days.
+  const trend: { date: Date; tokens: number }[] = [];
+  for (let i = TREND_DAYS - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    trend.push({ date: d, tokens: totals.get(localDate(d)) ?? 0 });
+  }
+  const peak = Math.max(0, ...trend.map((t) => t.tokens));
+  const W = 300;
+  const H = 80;
+  const path = smoothPath(
+    trend.map((t, i) => [(i / (TREND_DAYS - 1)) * W, H - 6 - (peak ? (t.tokens / peak) * (H - 12) : 0)]),
+  );
+  const md = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+
   return (
-    <section className="glass panel">
+    <section className="glass panel activity">
       <div className="row">
         <h2>Activity</h2>
         <span className="muted small">{active} active days</span>
       </div>
-      <div className="heatmap" style={{ gridTemplateColumns: `repeat(${HEATMAP_WEEKS}, 1fr)` }}>
+      <div className="heatmap" style={{ gridTemplateColumns: `repeat(${weeks}, 1fr)` }}>
         {cells.map((c) => (
           <span
             key={c.date}
             className="cell"
-            data-future={c.future || undefined}
+            data-hidden={c.hidden || undefined}
             // Square root keeps light days visible next to heavy ones.
-            style={{ "--level": c.tokens ? 0.2 + 0.8 * Math.sqrt(c.tokens / max) : 0 } as React.CSSProperties}
+            style={{ "--level": c.tokens ? 0.25 + 0.75 * Math.sqrt(c.tokens / max) : 0 } as React.CSSProperties}
             title={`${c.date}: ${compact(c.tokens)} tokens`}
           />
         ))}
+      </div>
+      <div className="axis months">
+        {monthStarts.map((m) => (
+          <span key={m.month} style={{ left: `${((m.week + 0.5) / weeks) * 100}%` }}>
+            {MONTHS[m.month]}
+          </span>
+        ))}
+      </div>
+
+      <div className="row trend-head">
+        <h2>Trend</h2>
+        <span className="muted small">Peak {compact(peak)}</span>
+      </div>
+      <svg className="trend" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-label={`Daily tokens, peak ${compact(peak)}`}>
+        <path d={path} />
+      </svg>
+      <div className="axis dates">
+        <span>{md(trend[0].date)}</span>
+        <span>{md(trend[Math.floor(TREND_DAYS / 2)].date)}</span>
+        <span>{md(trend[TREND_DAYS - 1].date)}</span>
       </div>
     </section>
   );
