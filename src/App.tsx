@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { Agent, AgentState, SessionStatus, Snapshot, TokenStats } from "./types";
@@ -99,7 +99,34 @@ function AgentRow({ agent, history, status }: { agent: Agent; history: number[];
   );
 }
 
+/**
+ * Scales `ref`'s content down so all of it fits the window without scrolling.
+ * The content is widened by the same factor, so it scales as a whole.
+ */
+function useFitToWindow() {
+  const ref = useRef<HTMLElement>(null);
+  const [scale, setScale] = useState(1);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      // offsetHeight is the unscaled layout height; transforms don't change it.
+      const next = Math.min(1, window.innerHeight / el.offsetHeight);
+      setScale((prev) => (Math.abs(prev - next) > 0.005 ? next : prev));
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(el);
+    window.addEventListener("resize", fit);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", fit);
+    };
+  }, []);
+  return { ref, scale };
+}
+
 function App() {
+  const { ref: fitRef, scale } = useFitToWindow();
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [history, setHistory] = useState<Record<number, number[]>>({});
   const [statuses, setStatuses] = useState<SessionStatus[]>([]);
@@ -141,7 +168,11 @@ function App() {
   return (
     <>
       <div className="backdrop" aria-hidden />
-      <main className="app">
+      <main
+        className="app"
+        ref={fitRef}
+        style={{ transform: `scale(${scale})`, width: `${100 / scale}vw` }}
+      >
         <header className="app-header" data-tauri-drag-region>
           <div className="app-title" data-tauri-drag-region>
             <Mika state={overall?.state ?? "idle"} size={40} />
