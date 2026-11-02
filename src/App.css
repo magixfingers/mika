@@ -344,19 +344,9 @@ p {
 
 .mark {
   flex: none;
-  width: 1.05em;
-  height: 1.05em;
-  overflow: visible;
-}
-
-.mark-claude path {
+  width: 1.1em;
+  height: 1.1em;
   fill: currentColor;
-}
-
-.mark-codex .loop {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.3;
 }
 
 .plan {

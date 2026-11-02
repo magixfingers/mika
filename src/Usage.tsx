@@ -1,5 +1,6 @@
 import type { DayUsage, ModelUsage, Provider, RateLimit, SessionStatus, SessionUsage } from "./types";
 import { Mika, STATE_LABELS } from "./Mika";
+import { CLAUDE_LOGO, OPENAI_LOGO } from "./logos";
 import { compact, folderName, formatCost, localDate, timeAgo, timeUntil } from "./format";
 
 export type Range = "day" | "month" | "total";
@@ -242,35 +243,10 @@ export function Activity({ days }: { days: DayUsage[] }) {
   );
 }
 
-// Twelve tapered rays, evoking Claude's starburst.
-const CLAUDE_RAYS = Array.from({ length: 12 }, (_, i) => i * 30);
-// Six interlocking loops, evoking OpenAI's knot.
-const OPENAI_LOOPS = Array.from({ length: 6 }, (_, i) => i * 60);
-
 export function ProviderMark({ provider }: { provider: Provider }) {
-  const label = provider === "claude" ? "Claude" : "Codex";
   return (
-    <svg className={`mark mark-${provider}`} viewBox="-12 -12 24 24" role="img" aria-label={label}>
-      {provider === "claude"
-        ? CLAUDE_RAYS.map((deg, i) => (
-            <path
-              key={deg}
-              transform={`rotate(${deg})`}
-              d={i % 2 ? "M-0.9 -2 L0 -9 L0.9 -2 Z" : "M-1.1 -1.5 L0 -11 L1.1 -1.5 Z"}
-            />
-          ))
-        : OPENAI_LOOPS.map((deg) => (
-            <rect
-              key={deg}
-              transform={`rotate(${deg}) translate(0 -4.2)`}
-              x="-2.6"
-              y="-5.2"
-              width="5.2"
-              height="10.4"
-              rx="2.6"
-              className="loop"
-            />
-          ))}
+    <svg className="mark" viewBox="0 0 24 24" role="img" aria-label={provider === "claude" ? "Claude" : "ChatGPT"}>
+      <path fillRule="evenodd" d={provider === "claude" ? CLAUDE_LOGO : OPENAI_LOGO} />
     </svg>
   );
 }
