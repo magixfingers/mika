@@ -233,7 +233,7 @@ function App() {
                 ))}
               </ul>
             </section>
-            {tokens && <Sessions sessions={tokens.sessions} statuses={statuses} />}
+            {tokens && <Sessions sessions={tokens.sessions[range]} reviews={tokens.reviews[range]} statuses={statuses} />}
           </div>
         </div>
 

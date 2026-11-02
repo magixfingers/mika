@@ -407,6 +407,48 @@ h2,
   white-space: nowrap;
 }
 
+.session {
+  align-items: flex-start;
+}
+
+.session .lead {
+  padding-top: 2px;
+}
+
+.session-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-body .name {
+  font-weight: 500;
+}
+
+.session-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-body .share {
+  margin-top: 6px;
+}
+
+.context {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.meter.mini {
+  width: 32px;
+}
+
 /* Sessions take the remaining height and show as many rows as fit. */
 .sessions {
   flex: 0 1 auto;

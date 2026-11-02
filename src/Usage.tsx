@@ -1,8 +1,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import type { ClaudeLimits, DayUsage, ModelUsage, Provider, RateLimit, SessionStatus, SessionUsage } from "./types";
+import type { ClaudeLimits, DayUsage, ReviewSummary, ModelUsage, Provider, RateLimit, SessionStatus, SessionUsage } from "./types";
 import { Mika, STATE_LABELS } from "./Mika";
 import { CLAUDE_LOGO, OPENAI_LOGO } from "./logos";
-import { compact, folderName, formatCost, localDate, timeAgo, timeUntil } from "./format";
+import { compact, formatCost, localDate, timeUntil } from "./format";
 
 export type Range = "day" | "month" | "total";
 
@@ -156,11 +156,100 @@ export function Models({ usage }: { usage: Map<string, ModelUsage> }) {
   );
 }
 
+const PROVIDER_LABELS: Record<Provider, string> = { claude: "Claude Code", codex: "Codex" };
+
+function clock(ms: number): string {
+  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function SessionRow({ s, live, max }: { s: SessionUsage; live?: SessionStatus; max: number }) {
+  const model = s.models.length === 1 ? s.models[0].replace(/-\d{8}$/, "") : `${s.models.length} models`;
+  const untitled = !s.title;
+  const title = s.title ?? `${PROVIDER_LABELS[s.provider]} · ${model}`;
+  const kind = [
+    PROVIDER_LABELS[s.provider],
+    model,
+    s.effort,
+    s.subagents > 0 && `${s.subagents} subagent${s.subagents === 1 ? "" : "s"}`,
+  ];
+  const activity = [
+    clock(s.last_active_ms),
+    `${s.calls} call${s.calls === 1 ? "" : "s"}`,
+    `${Math.round(s.cache_hit * 100)}% cached`,
+  ];
+  const cacheLeft = s.cache_expires_ms ? Math.ceil((s.cache_expires_ms - Date.now()) / 60000) : 0;
+  return (
+    <li className="session">
+      <span className="lead">{live ? <Mika state={live.state} size={22} /> : <ProviderMark provider={s.provider} />}</span>
+      <div className="session-body">
+        <div className="row">
+          <span className="name">{title}</span>
+          <span className="num">{s.tokens.toLocaleString()}</span>
+        </div>
+        <div className="row small">
+          <span className="muted session-meta">
+            {(untitled ? [live && STATE_LABELS[live.state], ...activity] : [live && STATE_LABELS[live.state], ...kind])
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+          <span className="muted num">{formatCost(s.cost)}</span>
+        </div>
+        <div className="row small">
+          <span className="muted session-meta">{untitled ? s.id : activity.join(" · ")}</span>
+          {s.context_percent !== null ? (
+            <span className="context" title="Context window used by the last call">
+              <span className="meter mini" style={{ "--fill": Math.min(1, s.context_percent / 100) } as React.CSSProperties}>
+                <span />
+              </span>
+              <span className="muted num">{Math.round(s.context_percent)}%</span>
+            </span>
+          ) : cacheLeft > 0 ? (
+            <span className="muted num" title="Time left on Claude's prompt cache">
+              Cache {cacheLeft}m
+            </span>
+          ) : null}
+        </div>
+        <div className="share" style={{ "--fill": s.tokens / max } as React.CSSProperties} />
+      </div>
+    </li>
+  );
+}
+
+function ReviewRow({ r, max }: { r: ReviewSummary; max: number }) {
+  return (
+    <li className="session">
+      <span className="lead">
+        <ProviderMark provider="codex" />
+      </span>
+      <div className="session-body">
+        <div className="row">
+          <span className="name">Codex Auto Review</span>
+          <span className="num">{r.tokens.toLocaleString()}</span>
+        </div>
+        <div className="row small">
+          <span className="muted session-meta">
+            Latest {clock(r.latest_ms)} · {compact(r.latest_tokens)}
+          </span>
+          <span className="muted num">{formatCost(r.cost)}</span>
+        </div>
+        <div className="row small">
+          <span className="muted session-meta">
+            {r.runs} background run{r.runs === 1 ? "" : "s"}
+          </span>
+        </div>
+        <div className="share" style={{ "--fill": r.tokens / max } as React.CSSProperties} />
+      </div>
+    </li>
+  );
+}
+
 export function Sessions({
   sessions,
+  reviews,
   statuses,
 }: {
   sessions: SessionUsage[];
+  reviews: ReviewSummary | null;
   statuses: SessionStatus[];
 }) {
   // Fade the bottom edge only when rows are actually cut off.
@@ -174,28 +263,32 @@ export function Sessions({
     observer.observe(el);
     check();
     return () => observer.disconnect();
-  }, [sessions]);
+  }, [sessions, reviews]);
+
+  // Rows sort by recency; the review summary slots in by its latest run.
+  const rows: ({ kind: "session"; s: SessionUsage; at: number } | { kind: "review"; r: ReviewSummary; at: number })[] = [
+    ...sessions.map((s) => ({ kind: "session" as const, s, at: s.last_active_ms })),
+    ...(reviews ? [{ kind: "review" as const, r: reviews, at: reviews.latest_ms }] : []),
+  ].sort((a, b) => b.at - a.at);
+  const max = Math.max(1, ...sessions.map((s) => s.tokens), reviews?.tokens ?? 0);
+
   return (
     <section className="panel sessions">
       <h2>Sessions</h2>
+      {rows.length === 0 && <p className="muted">No sessions in this range.</p>}
       <ul className="list" ref={listRef} data-clipped={clipped || undefined}>
-        {sessions.map((s) => {
-          const live = s.provider === "claude" ? statuses.find((st) => st.session_id === s.id) : undefined;
-          const model = s.models.length === 1 ? s.models[0] : `${s.models.length} models`;
-          const meta = [model, s.effort, s.subagents > 0 && `${s.subagents} subagent${s.subagents === 1 ? "" : "s"}`, timeAgo(s.last_active_ms)]
-            .filter(Boolean)
-            .join(" · ");
-          return (
-            <li key={`${s.provider}:${s.id}`} className="session">
-              <span className="lead">{live ? <Mika state={live.state} size={22} /> : <ProviderMark provider={s.provider} />}</span>
-              <div className="session-text">
-                <span className="name">{s.title ?? folderName(s.cwd) ?? s.id.slice(0, 13)}</span>
-                <span className="muted small">{live ? `${STATE_LABELS[live.state]} · ${meta}` : meta}</span>
-              </div>
-              <span className="num">{compact(s.tokens)}</span>
-            </li>
-          );
-        })}
+        {rows.map((row) =>
+          row.kind === "review" ? (
+            <ReviewRow key="review" r={row.r} max={max} />
+          ) : (
+            <SessionRow
+              key={`${row.s.provider}:${row.s.id}`}
+              s={row.s}
+              max={max}
+              live={row.s.provider === "claude" ? statuses.find((st) => st.session_id === row.s.id) : undefined}
+            />
+          ),
+        )}
       </ul>
     </section>
   );

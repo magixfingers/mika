@@ -62,8 +62,26 @@ export interface SessionUsage {
   effort: string | null;
   tokens: number;
   cost: number;
+  calls: number;
+  cache_hit: number;
   subagents: number;
   last_active_ms: number;
+  context_percent: number | null;
+  cache_expires_ms: number | null;
+}
+
+export interface ReviewSummary {
+  runs: number;
+  tokens: number;
+  cost: number;
+  latest_ms: number;
+  latest_tokens: number;
+}
+
+export interface ByRange<T> {
+  day: T;
+  month: T;
+  total: T;
 }
 
 export interface RateLimit {
@@ -75,7 +93,8 @@ export interface RateLimit {
 
 export interface TokenStats {
   days: DayUsage[];
-  sessions: SessionUsage[];
+  sessions: ByRange<SessionUsage[]>;
+  reviews: ByRange<ReviewSummary | null>;
   codex_limit: RateLimit | null;
   tokens_per_sec: number;
 }

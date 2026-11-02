@@ -3,7 +3,7 @@
 //! The logs are large and append-only, so each file is read incrementally:
 //! a scan only parses lines added since the previous scan.
 
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -71,8 +71,35 @@ pub struct SessionUsage {
     pub effort: Option<String>,
     pub tokens: u64,
     pub cost: f64,
+    /// API calls: Claude messages or Codex token events.
+    pub calls: u64,
+    /// Share of input served from the prompt cache, 0..1.
+    pub cache_hit: f64,
     pub subagents: usize,
     pub last_active_ms: i64,
+    /// Last call's input as a share of the context window; Codex only, since
+    /// Claude logs don't record the window size.
+    pub context_percent: Option<f64>,
+    /// When Claude's prompt cache for this session expires.
+    pub cache_expires_ms: Option<i64>,
+}
+
+/// Codex's automatic review runs, summarized as one row.
+#[derive(Debug, Clone, Serialize)]
+pub struct ReviewSummary {
+    pub runs: usize,
+    pub tokens: u64,
+    pub cost: f64,
+    pub latest_ms: i64,
+    pub latest_tokens: u64,
+}
+
+/// The same list for each range the UI offers, so switching is instant.
+#[derive(Debug, Clone, Serialize)]
+pub struct ByRange<T> {
+    pub day: T,
+    pub month: T,
+    pub total: T,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -86,7 +113,8 @@ pub struct RateLimit {
 #[derive(Debug, Clone, Serialize)]
 pub struct TokenStats {
     pub days: Vec<DayUsage>,
-    pub sessions: Vec<SessionUsage>,
+    pub sessions: ByRange<Vec<SessionUsage>>,
+    pub reviews: ByRange<Option<ReviewSummary>>,
     pub codex_limit: Option<RateLimit>,
     pub tokens_per_sec: f64,
 }
@@ -116,14 +144,51 @@ pub fn cost(model: &str, u: &Usage) -> f64 {
 }
 
 #[derive(Default)]
+struct SessionDay {
+    models: BTreeMap<String, Usage>,
+    calls: u64,
+}
+
+#[derive(Default)]
 struct Session {
     provider: Option<Provider>,
     title: Option<String>,
     cwd: Option<String>,
-    models: BTreeMap<String, Usage>,
+    /// Usage by local date, so each range can be summed.
+    days: BTreeMap<String, SessionDay>,
     effort: Option<String>,
-    subagents: HashSet<String>,
+    /// Subagent id → local dates it did work, so counts follow the range.
+    subagents: HashMap<String, BTreeSet<String>>,
     last_active_ms: i64,
+    /// Last call's input tokens and the model's context window (Codex).
+    context: Option<(u64, u64)>,
+    /// Claude prompt-cache lifetime set by the latest cache write.
+    cache_ttl_ms: Option<i64>,
+}
+
+/// One Codex auto-review thread (one log file).
+#[derive(Default)]
+struct ReviewRun {
+    days: BTreeMap<String, Usage>,
+    last_ms: i64,
+}
+
+/// Which local dates a range covers.
+#[derive(Clone, Copy)]
+enum Range {
+    Day,
+    Month,
+    Total,
+}
+
+impl Range {
+    fn contains(self, date: &str, today: &str) -> bool {
+        match self {
+            Range::Day => date == today,
+            Range::Month => date.get(..7) == today.get(..7),
+            Range::Total => true,
+        }
+    }
 }
 
 /// Per-file parse state that must survive between incremental reads.
@@ -133,6 +198,8 @@ struct FileState {
     codex_model: Option<String>,
     codex_effort: Option<String>,
     codex_session: Option<String>,
+    /// Set when this file is a spawned subagent thread.
+    codex_subagent_id: Option<String>,
     codex_last_total: u64,
 }
 
@@ -146,6 +213,7 @@ pub struct TokenScanner {
     sessions: HashMap<String, Session>,
     codex_titles: HashMap<String, String>,
     days: BTreeMap<String, BTreeMap<String, Usage>>,
+    reviews: HashMap<PathBuf, ReviewRun>,
     recent: VecDeque<(i64, u64)>,
     /// The newest Codex rate limit seen, with the time it was logged.
     codex_limit: Option<(i64, RateLimit)>,
@@ -170,6 +238,7 @@ impl TokenScanner {
             sessions: HashMap::new(),
             codex_titles: HashMap::new(),
             days: BTreeMap::new(),
+            reviews: HashMap::new(),
             recent: VecDeque::new(),
             codex_limit: None,
         }
@@ -273,8 +342,15 @@ impl TokenScanner {
         if let Some(effort) = v["effort"].as_str() {
             session.effort = Some(effort.to_string());
         }
+        // A cache write sets the lifetime; reads refresh it from the last call.
+        let creation = &u["cache_creation"];
+        if creation["ephemeral_1h_input_tokens"].as_u64().unwrap_or(0) > 0 {
+            session.cache_ttl_ms = Some(60 * 60 * 1000);
+        } else if creation["ephemeral_5m_input_tokens"].as_u64().unwrap_or(0) > 0 {
+            session.cache_ttl_ms = Some(5 * 60 * 1000);
+        }
         if path.components().any(|c| c.as_os_str() == "subagents") {
-            session.subagents.insert(path.display().to_string());
+            session.subagents.entry(path.display().to_string()).or_default().insert(local_date(ts));
         }
         self.record(&key, model, usage, ts);
     }
@@ -290,18 +366,23 @@ impl TokenScanner {
         let p = &v["payload"];
         match (v["type"].as_str(), p["type"].as_str()) {
             (Some("session_meta"), _) => {
+                // A subagent's file later repeats its parent's session_meta; only the first describes this thread.
+                if self.files.get(path).is_some_and(|f| f.codex_session.is_some()) {
+                    return;
+                }
                 let Some(id) = p["id"].as_str() else { return };
                 // Subagent threads roll up into the thread that started them.
                 let root = p["parent_thread_id"].as_str().unwrap_or(id);
                 let key = format!("codex:{root}");
                 let session = self.session(&key, Provider::Codex);
-                if root != id {
-                    session.subagents.insert(id.to_string());
-                }
                 if session.cwd.is_none() {
                     session.cwd = p["cwd"].as_str().map(String::from);
                 }
-                self.files.entry(path.to_path_buf()).or_default().codex_session = Some(key);
+                let state = self.files.entry(path.to_path_buf()).or_default();
+                state.codex_session = Some(key);
+                // Spawned subagents count; review ("guardian") threads also hang off the parent but don't.
+                let spawned = root != id && p["source"]["subagent"]["thread_spawn"].is_object();
+                state.codex_subagent_id = spawned.then(|| id.to_string());
             }
             (Some("turn_context"), _) => {
                 let state = self.files.entry(path.to_path_buf()).or_default();
@@ -347,6 +428,7 @@ impl TokenScanner {
         let Some(key) = state.codex_session.clone() else { return };
         let model = state.codex_model.clone().unwrap_or_else(|| "codex".into());
         let effort = state.codex_effort.clone();
+        let subagent_id = state.codex_subagent_id.clone();
 
         let last = &info["last_token_usage"];
         let input = last["input_tokens"].as_u64().unwrap_or(0);
@@ -358,10 +440,23 @@ impl TokenScanner {
             cache_read: cached,
             cache_write: 0,
         };
-        if model != REVIEW_MODEL
-            && let Some(effort) = effort
-        {
-            self.session(&key, Provider::Codex).effort = Some(effort);
+        if model == REVIEW_MODEL {
+            let run = self.reviews.entry(path.to_path_buf()).or_default();
+            run.days.entry(local_date(ts)).or_default().add(&usage);
+            run.last_ms = run.last_ms.max(ts);
+        } else {
+            let window = info["model_context_window"].as_u64().unwrap_or(0);
+            let session = self.session(&key, Provider::Codex);
+            if let Some(effort) = effort {
+                session.effort = Some(effort);
+            }
+            if let Some(id) = subagent_id {
+                session.subagents.entry(id).or_default().insert(local_date(ts));
+            } else if window > 0 {
+                // The context bar describes the main thread, not its subagents.
+                session.context = Some((input, window));
+            }
+
         }
         self.record(&key, &model, usage, ts);
     }
@@ -373,16 +468,15 @@ impl TokenScanner {
     }
 
     fn record(&mut self, key: &str, model: &str, usage: Usage, ts_ms: i64) {
+        let day = local_date(ts_ms);
         if model != REVIEW_MODEL {
             let session = self.sessions.entry(key.to_string()).or_default();
-            session.models.entry(model.to_string()).or_default().add(&usage);
+            let session_day = session.days.entry(day.clone()).or_default();
+            session_day.models.entry(model.to_string()).or_default().add(&usage);
+            session_day.calls += 1;
             session.last_active_ms = session.last_active_ms.max(ts_ms);
         }
-
-        if let Some(date) = DateTime::from_timestamp_millis(ts_ms) {
-            let day = date.with_timezone(&Local).format("%Y-%m-%d").to_string();
-            self.days.entry(day).or_default().entry(model.to_string()).or_default().add(&usage);
-        }
+        self.days.entry(day).or_default().entry(model.to_string()).or_default().add(&usage);
         if ts_ms > now_ms() - RATE_WINDOW_MS {
             self.recent.push_back((ts_ms, usage.total()));
         }
@@ -405,40 +499,114 @@ impl TokenScanner {
             })
             .collect();
 
-        let mut sessions: Vec<SessionUsage> = self
-            .sessions
-            .iter()
-            .filter(|(_, s)| s.models.values().any(|u| u.total() > 0))
-            .map(|(key, s)| {
-                let id = key.split_once(':').map(|(_, id)| id).unwrap_or(key);
-                SessionUsage {
-                    id: id.to_string(),
-                    provider: s.provider.unwrap_or(Provider::Claude),
-                    title: s.title.clone().or_else(|| self.codex_titles.get(id).cloned()),
-                    cwd: s.cwd.clone(),
-                    models: s.models.keys().cloned().collect(),
-                    effort: s.effort.clone(),
-                    tokens: s.models.values().map(Usage::total).sum(),
-                    cost: s.models.iter().map(|(m, u)| cost(m, u)).sum(),
-                    subagents: s.subagents.len(),
-                    last_active_ms: s.last_active_ms,
-                }
-            })
-            .collect();
-        sessions.sort_by_key(|s| std::cmp::Reverse(s.last_active_ms));
-        sessions.truncate(MAX_SESSIONS);
+        let today = local_date(now_ms());
+        let sessions = ByRange {
+            day: self.sessions_in(Range::Day, &today),
+            month: self.sessions_in(Range::Month, &today),
+            total: self.sessions_in(Range::Total, &today),
+        };
+        let reviews = ByRange {
+            day: self.reviews_in(Range::Day, &today),
+            month: self.reviews_in(Range::Month, &today),
+            total: self.reviews_in(Range::Total, &today),
+        };
 
         TokenStats {
             days,
             sessions,
+            reviews,
             codex_limit: self.codex_limit.as_ref().map(|(_, l)| l.clone()),
             tokens_per_sec: recent as f64 / (RATE_WINDOW_MS as f64 / 1000.0),
         }
+    }
+
+    fn sessions_in(&self, range: Range, today: &str) -> Vec<SessionUsage> {
+        let now = now_ms();
+        let mut out: Vec<SessionUsage> = self
+            .sessions
+            .iter()
+            .filter_map(|(key, s)| {
+                let mut models: BTreeMap<&str, Usage> = BTreeMap::new();
+                let mut calls = 0;
+                for (_, day) in s.days.iter().filter(|(d, _)| range.contains(d, today)) {
+                    calls += day.calls;
+                    for (m, u) in &day.models {
+                        models.entry(m.as_str()).or_default().add(u);
+                    }
+                }
+                let usage = models.values().fold(Usage::default(), |mut acc, u| {
+                    acc.add(u);
+                    acc
+                });
+                if usage.total() == 0 {
+                    return None;
+                }
+                let input_side = usage.input + usage.cache_read + usage.cache_write;
+                let id = key.split_once(':').map(|(_, id)| id).unwrap_or(key);
+                Some(SessionUsage {
+                    id: id.to_string(),
+                    provider: s.provider.unwrap_or(Provider::Claude),
+                    title: s.title.clone().or_else(|| self.codex_titles.get(id).cloned()),
+                    cwd: s.cwd.clone(),
+                    models: models.keys().map(|m| m.to_string()).collect(),
+                    effort: s.effort.clone(),
+                    tokens: usage.total(),
+                    cost: models.iter().map(|(m, u)| cost(m, u)).sum(),
+                    calls,
+                    cache_hit: if input_side > 0 { usage.cache_read as f64 / input_side as f64 } else { 0.0 },
+                    subagents: s
+                        .subagents
+                        .values()
+                        .filter(|days| days.iter().any(|d| range.contains(d, today)))
+                        .count(),
+                    last_active_ms: s.last_active_ms,
+                    context_percent: s.context.map(|(used, window)| used as f64 / window as f64 * 100.0),
+                    cache_expires_ms: s
+                        .cache_ttl_ms
+                        .map(|ttl| s.last_active_ms + ttl)
+                        .filter(|expires| *expires > now),
+                })
+            })
+            .collect();
+        out.sort_by_key(|s| std::cmp::Reverse(s.last_active_ms));
+        out.truncate(MAX_SESSIONS);
+        out
+    }
+
+    fn reviews_in(&self, range: Range, today: &str) -> Option<ReviewSummary> {
+        let mut summary = ReviewSummary { runs: 0, tokens: 0, cost: 0.0, latest_ms: 0, latest_tokens: 0 };
+        for run in self.reviews.values() {
+            let usage = run
+                .days
+                .iter()
+                .filter(|(d, _)| range.contains(d, today))
+                .fold(Usage::default(), |mut acc, (_, u)| {
+                    acc.add(u);
+                    acc
+                });
+            if usage.total() == 0 {
+                continue;
+            }
+            summary.runs += 1;
+            summary.tokens += usage.total();
+            summary.cost += cost(REVIEW_MODEL, &usage);
+            if run.last_ms > summary.latest_ms {
+                summary.latest_ms = run.last_ms;
+                summary.latest_tokens = usage.total();
+            }
+        }
+        (summary.runs > 0).then_some(summary)
     }
 }
 
 fn timestamp_ms(v: &Value) -> Option<i64> {
     DateTime::parse_from_rfc3339(v.as_str()?).ok().map(|d| d.timestamp_millis())
+}
+
+fn local_date(ts_ms: i64) -> String {
+    DateTime::from_timestamp_millis(ts_ms)
+        .map(|d| d.with_timezone(&Local).format("%Y-%m-%d").to_string())
+        .unwrap_or_default()
 }
 
 fn now_ms() -> i64 {
@@ -510,10 +678,10 @@ mod tests {
         assert!(scanner.scan());
         let stats = scanner.stats();
 
-        let claude_s = stats.sessions.iter().find(|s| s.id == "s1").unwrap();
+        let claude_s = stats.sessions.total.iter().find(|s| s.id == "s1").unwrap();
         assert_eq!(claude_s.tokens, 100);
         assert_eq!(claude_s.title.as_deref(), Some("Fix bug"));
-        let codex_s = stats.sessions.iter().find(|s| s.id == "c1").unwrap();
+        let codex_s = stats.sessions.total.iter().find(|s| s.id == "c1").unwrap();
         assert_eq!(codex_s.tokens, 105);
         assert_eq!(codex_s.title.as_deref(), Some("Codex task"));
         assert_eq!(codex_s.models, vec!["gpt-6.1-sol"]);
@@ -525,7 +693,7 @@ mod tests {
         assert!(!scanner.scan());
         write(&codex, &[&count(210)]);
         assert!(scanner.scan());
-        let codex_s = scanner.stats().sessions.into_iter().find(|s| s.id == "c1").unwrap();
+        let codex_s = scanner.stats().sessions.total.into_iter().find(|s| s.id == "c1").unwrap();
         assert_eq!(codex_s.tokens, 210);
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -544,9 +712,13 @@ mod tests {
         let stats = scanner.stats();
         let total: u64 = stats.days.iter().flat_map(|d| d.models.values()).map(|m| m.tokens).sum();
         println!("first scan {first:?}, rescan {:?}, {total} tokens", start.elapsed() - first);
-        for s in &stats.sessions {
-            println!("{:?} {:?} {} {:?}", s.provider, s.title, s.tokens, s.models);
+        for s in &stats.sessions.day {
+            println!(
+                "{:?} {:?} {} {:?} calls={} cache={:.0}% ctx={:?} cache_exp={:?} sub={}",
+                s.provider, s.title, s.tokens, s.models, s.calls, s.cache_hit * 100.0, s.context_percent.map(|c| c.round()), s.cache_expires_ms.map(|e| (e - now_ms()) / 60000), s.subagents
+            );
         }
+        println!("reviews today: {:?}", stats.reviews.day);
         println!("{:?}", stats.codex_limit);
     }
 
@@ -555,5 +727,40 @@ mod tests {
         let u = Usage { input: 1_000_000, output: 1_000_000, cache_read: 0, cache_write: 0 };
         assert_eq!(cost("claude-opus-5-5", &u), 30.0);
         assert_eq!(cost("claude-haiku-4-5", &u), 6.0);
+    }
+}
+
+#[cfg(test)]
+mod subagent_tests {
+    use super::*;
+
+    #[test]
+    fn counts_working_codex_subagents_only() {
+        let dir = std::env::temp_dir().join(format!("mika-sub-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let day = dir.join("codex/2026/11/03");
+        std::fs::create_dir_all(&day).unwrap();
+        let ts = "2026-11-03T01:00:00Z";
+        let write = |name: &str, lines: &[String]| std::fs::write(day.join(name), lines.join("\n") + "\n").unwrap();
+        let count = format!(r#"{{"timestamp":"{ts}","type":"event_msg","payload":{{"type":"token_count","info":{{"total_token_usage":{{"total_tokens":10}},"last_token_usage":{{"input_tokens":10,"output_tokens":0}}}}}}}}"#);
+        write("parent.jsonl", &[
+            format!(r#"{{"timestamp":"{ts}","type":"session_meta","payload":{{"id":"p"}}}}"#),
+            format!(r#"{{"timestamp":"{ts}","type":"turn_context","payload":{{"model":"gpt-6.1-terra"}}}}"#),
+            count.clone(),
+        ]);
+        write("child.jsonl", &[
+            format!(r#"{{"timestamp":"{ts}","type":"session_meta","payload":{{"id":"c","parent_thread_id":"p","source":{{"subagent":{{"thread_spawn":{{}}}}}}}}}}"#),
+            format!(r#"{{"timestamp":"{ts}","type":"turn_context","payload":{{"model":"gpt-6.1-terra"}}}}"#),
+            count.clone(),
+        ]);
+        write("review.jsonl", &[
+            format!(r#"{{"timestamp":"{ts}","type":"session_meta","payload":{{"id":"r","parent_thread_id":"p","source":{{"subagent":{{"other":"guardian"}}}}}}}}"#),
+            format!(r#"{{"timestamp":"{ts}","type":"turn_context","payload":{{"model":"codex-auto-review"}}}}"#),
+        ]);
+        let mut scanner = TokenScanner::with_roots(dir.join("none"), dir.join("codex"), dir.join("index.jsonl"));
+        scanner.scan();
+        let s = scanner.stats().sessions.total.into_iter().find(|s| s.id == "p").unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(s.subagents, 1);
     }
 }
