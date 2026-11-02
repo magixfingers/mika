@@ -67,17 +67,20 @@ body {
 .agent {
   background: var(--card);
   border: 1px solid var(--border);
-  border-left: 4px solid var(--muted);
   border-radius: 10px;
   overflow: hidden;
 }
 
+.agent {
+  --accent: var(--muted);
+}
+
 .agent-claude {
-  border-left-color: var(--claude);
+  --accent: var(--claude);
 }
 
 .agent-codex {
-  border-left-color: var(--codex);
+  --accent: var(--codex);
 }
 
 .agent-header {
@@ -100,6 +103,17 @@ body {
 
 .agent-kind {
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-kind::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .agent-cwd {
@@ -117,16 +131,8 @@ body {
 
 .sparkline polyline {
   fill: none;
-  stroke: var(--muted);
+  stroke: var(--accent);
   stroke-width: 1.5;
-}
-
-.agent-claude .sparkline polyline {
-  stroke: var(--claude);
-}
-
-.agent-codex .sparkline polyline {
-  stroke: var(--codex);
 }
 
 .agent-stats {
