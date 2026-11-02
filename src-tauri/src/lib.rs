@@ -3,9 +3,13 @@ mod sampler;
 mod status;
 mod tokens;
 
-use std::sync::Mutex;
+use std::collections::HashSet;
+use std::path::PathBuf;
+use std::sync::{Mutex, mpsc};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+use notify::{RecursiveMode, Watcher};
 
 use claude_limits::ClaudeLimits;
 use sampler::{Sampler, Snapshot};
@@ -15,11 +19,18 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-const SAMPLE_INTERVAL: Duration = Duration::from_secs(2);
-/// Token logs change less often than processes, and a scan touches many files.
-const TOKEN_SCAN_INTERVAL: Duration = Duration::from_secs(5);
+const SAMPLE_INTERVAL: Duration = Duration::from_secs(1);
+/// Longest wait between token updates when nothing changes (keeps tok/s decaying).
+const TOKEN_TICK: Duration = Duration::from_secs(1);
+/// Quiet gap that ends a burst of file-change events.
+const TOKEN_DEBOUNCE: Duration = Duration::from_millis(80);
+const TOKEN_MAX_BURST: Duration = Duration::from_millis(300);
+/// Safety-net full rescan, for new folders or missed events.
+const TOKEN_FULL_RESCAN: Duration = Duration::from_secs(30);
 /// Claude Code's own usage view polls about this often; limits move slowly.
 const CLAUDE_LIMITS_INTERVAL: Duration = Duration::from_secs(300);
+/// After a failure (e.g. HTTP 429, too many requests), wait longer before retrying.
+const CLAUDE_LIMITS_BACKOFF: Duration = Duration::from_secs(900);
 const TRAY_ID: &str = "mika-tray";
 
 /// The latest snapshot, so a window that opens between samples has data at once.
@@ -46,19 +57,22 @@ fn claude_limits(latest: State<'_, LatestClaudeLimits>) -> Option<ClaudeLimits> 
 #[derive(Default)]
 struct LatestTokens(Mutex<Option<TokenStats>>);
 
-/// Shows a macOS notification with a sound. osascript needs no extra plugin or
-/// entitlement; strings are escaped for AppleScript's double-quoted literals.
+const ALERT_SOUND: &str = "/System/Library/Sounds/Glass.aiff";
+
+/// Gets the user's attention when an agent needs them: a sound that needs no
+/// permission, a bouncing Dock icon, and a notification where macOS allows it
+/// (notifications from scripts can be silently blocked, so they are a bonus).
 #[tauri::command]
-fn alert(title: String, body: String) {
-    let quote = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
-    let script = format!(
-        "display notification \"{}\" with title \"{}\" sound name \"Glass\"",
-        quote(&body),
-        quote(&title)
-    );
-    if let Err(err) = std::process::Command::new("osascript").args(["-e", &script]).spawn() {
-        eprintln!("mika: could not show alert: {err}");
+fn alert(app: AppHandle, title: String, body: String) {
+    if let Err(err) = std::process::Command::new("afplay").arg(ALERT_SOUND).spawn() {
+        eprintln!("mika: could not play alert sound: {err}");
     }
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.request_user_attention(Some(tauri::UserAttentionType::Critical));
+    }
+    let quote = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+    let script = format!("display notification \"{}\" with title \"{}\"", quote(&body), quote(&title));
+    let _ = std::process::Command::new("osascript").args(["-e", &script]).spawn();
 }
 
 /// Lets the WebView report to the terminal, where webview console output doesn't reach.
@@ -159,15 +173,62 @@ fn spawn_token_scanner(app: AppHandle) {
     };
     thread::spawn(move || {
         let mut scanner = TokenScanner::new(&home);
-        loop {
-            scanner.scan();
-            // Emitted every tick, not only on change, so tokens per second decays to zero.
+        let publish = |scanner: &mut TokenScanner| {
             let stats = scanner.stats();
             let _ = app.emit("tokens", &stats);
             if let Ok(mut latest) = app.state::<LatestTokens>().0.lock() {
                 *latest = Some(stats);
             }
-            thread::sleep(TOKEN_SCAN_INTERVAL);
+        };
+        scanner.scan();
+        publish(&mut scanner);
+
+        // FSEvents tells us which log changed, so updates land within ~100 ms.
+        let (tx, rx) = mpsc::channel::<Vec<PathBuf>>();
+        let watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            if let Ok(event) = res {
+                let _ = tx.send(event.paths);
+            }
+        });
+        let _watcher = match watcher {
+            Ok(mut w) => {
+                for target in scanner.watch_targets() {
+                    let _ = w.watch(&target, RecursiveMode::Recursive);
+                }
+                Some(w)
+            }
+            Err(err) => {
+                eprintln!("mika: file watching unavailable, polling instead: {err}");
+                None
+            }
+        };
+
+        let mut last_full = Instant::now();
+        loop {
+            match rx.recv_timeout(TOKEN_TICK) {
+                Ok(first) => {
+                    // Agents write in bursts; gather the burst into one read.
+                    // Capped, so a constantly writing agent can't hold updates back.
+                    let mut paths: HashSet<PathBuf> = first.into_iter().collect();
+                    let burst_end = Instant::now() + TOKEN_MAX_BURST;
+                    while let Some(left) = burst_end.checked_duration_since(Instant::now()) {
+                        match rx.recv_timeout(left.min(TOKEN_DEBOUNCE)) {
+                            Ok(more) => paths.extend(more),
+                            Err(_) => break,
+                        }
+                    }
+                    scanner.scan_paths(paths);
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => thread::sleep(TOKEN_TICK),
+            }
+            // A full rescan catches new folders or events the watcher missed.
+            if last_full.elapsed() >= TOKEN_FULL_RESCAN {
+                scanner.scan();
+                last_full = Instant::now();
+            }
+            // Published every tick too, so tokens per second decays to zero.
+            publish(&mut scanner);
         }
     });
 }
@@ -176,22 +237,25 @@ fn spawn_claude_limits(app: AppHandle) {
     thread::spawn(move || {
         let mut last_error = None;
         loop {
-            match claude_limits::fetch() {
+            let wait = match claude_limits::fetch() {
                 Ok(limits) => {
                     last_error = None;
                     let _ = app.emit("claude_limits", &limits);
                     if let Ok(mut latest) = app.state::<LatestClaudeLimits>().0.lock() {
                         *latest = Some(limits);
                     }
+                    CLAUDE_LIMITS_INTERVAL
                 }
-                // Log each distinct failure once rather than every poll.
-                Err(err) if last_error.as_ref() != Some(&err) => {
-                    eprintln!("mika: Claude limits unavailable: {err}");
-                    last_error = Some(err);
+                Err(err) => {
+                    // Log each distinct failure once rather than every retry.
+                    if last_error.as_ref() != Some(&err) {
+                        eprintln!("mika: Claude limits unavailable: {err}");
+                        last_error = Some(err);
+                    }
+                    CLAUDE_LIMITS_BACKOFF
                 }
-                Err(_) => {}
-            }
-            thread::sleep(CLAUDE_LIMITS_INTERVAL);
+            };
+            thread::sleep(wait);
         }
     });
 }

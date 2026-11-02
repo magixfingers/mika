@@ -10,7 +10,7 @@ import { compact, formatBytes, formatUptime, shortPath } from "./format";
 import { startLiquidGlass } from "./liquid";
 import "./App.css";
 
-// 10 minutes of history at the 2-second sample interval.
+// 5 minutes of history at the 1-second sample interval.
 const HISTORY_LENGTH = 300;
 
 // Most urgent last, matching AgentState's order in status.rs.

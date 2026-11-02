@@ -258,6 +258,28 @@ impl TokenScanner {
         changed
     }
 
+    /// Folders and files to watch for changes.
+    pub fn watch_targets(&self) -> Vec<PathBuf> {
+        vec![self.claude_root.clone(), self.codex_root.clone(), self.codex_index.clone()]
+    }
+
+    /// Reads only the given changed files, routing each to its parser.
+    pub fn scan_paths(&mut self, paths: impl IntoIterator<Item = PathBuf>) -> bool {
+        let mut changed = false;
+        for path in paths {
+            if path == self.codex_index {
+                changed |= self.read_new_lines(&path, |s, _, line| s.codex_index_line(line));
+            } else if path.extension().is_none_or(|e| e != "jsonl") {
+                continue;
+            } else if path.starts_with(&self.claude_root) {
+                changed |= self.read_new_lines(&path, |s, p, line| s.claude_line(p, line));
+            } else if path.starts_with(&self.codex_root) {
+                changed |= self.read_new_lines(&path, |s, p, line| s.codex_line(p, line));
+            }
+        }
+        changed
+    }
+
     fn read_new_lines(&mut self, path: &Path, mut handle: impl FnMut(&mut Self, &Path, &str)) -> bool {
         let Ok(len) = path.metadata().map(|m| m.len()) else { return false };
         let mut offset = self.files.get(path).map(|f| f.offset).unwrap_or(0);
