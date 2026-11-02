@@ -57,30 +57,51 @@ pub fn fetch() -> Result<ClaudeLimits, String> {
         .map_err(|e| format!("usage response unreadable: {e}"))?;
 
     Ok(ClaudeLimits {
-        plan: oauth["subscriptionType"].as_str().map(String::from),
+        plan: plan_name(oauth),
         windows: parse_windows(&body),
     })
 }
 
+/// "max" plus tier "default_claude_max_20x" reads as "Max 20x".
+fn plan_name(oauth: &Value) -> Option<String> {
+    let plan = oauth["subscriptionType"].as_str()?;
+    let multiplier = oauth["rateLimitTier"]
+        .as_str()
+        .and_then(|t| t.rsplit('_').next())
+        .filter(|m| m.ends_with('x') && m[..m.len() - 1].chars().all(|c| c.is_ascii_digit()));
+    Some(match multiplier {
+        Some(m) => format!("{plan} {m}"),
+        None => plan.to_string(),
+    })
+}
+
+/// Reads the `limits` list: one entry per plan limit with a percent used,
+/// including inactive scoped ones (Claude Code's /usage shows those too).
+/// Other top-level keys are codenamed experiments, dollar caps or nulls.
 fn parse_windows(body: &Value) -> Vec<LimitWindow> {
-    let Some(map) = body.as_object() else { return Vec::new() };
-    let mut windows: Vec<LimitWindow> = map
+    let Some(limits) = body["limits"].as_array() else { return Vec::new() };
+    limits
         .iter()
-        .filter_map(|(id, w)| {
-            let used = w.get("utilization")?.as_f64()?;
+        .filter_map(|l| {
+            let kind = l["kind"].as_str()?;
+            // e.g. {"model": {"display_name": "Fable"}, "surface": null}
+            let scope = l["scope"]["model"]["display_name"]
+                .as_str()
+                .or_else(|| l["scope"]["surface"]["display_name"].as_str())
+                .or_else(|| l["scope"].as_str());
             Some(LimitWindow {
-                id: id.clone(),
-                used_percent: used,
-                resets_at_ms: w["resets_at"]
+                id: match scope {
+                    Some(scope) if kind != "weekly_all" => format!("{kind}:{scope}"),
+                    _ => kind.to_string(),
+                },
+                used_percent: l["percent"].as_f64()?,
+                resets_at_ms: l["resets_at"]
                     .as_str()
                     .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
                     .map(|d| d.timestamp_millis()),
             })
         })
-        .collect();
-    // Shortest window first: five_hour, then seven_day variants.
-    windows.sort_by_key(|w| (!w.id.starts_with("five"), w.id.clone()));
-    windows
+        .collect()
 }
 
 #[cfg(test)]
@@ -88,17 +109,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_known_and_unknown_windows() {
+    fn reads_the_limits_list() {
         let body = serde_json::json!({
-            "seven_day": {"utilization": 23.0, "resets_at": "2026-11-09T07:00:00+00:00"},
-            "five_hour": {"utilization": 4.5, "resets_at": null},
-            "seven_day_opus": null,
-            "extra_usage": {"is_enabled": false}
+            "iguana_necktie": {"limit_dollars": 250, "remaining_dollars": 221.3},
+            "seven_day": {"utilization": 24.0},
+            "limits": [
+                {"group": "weekly", "is_active": true, "kind": "weekly_all", "percent": 24, "resets_at": "2026-11-08T23:00:00.815787+00:00"},
+                {"group": "weekly", "is_active": false, "kind": "weekly_scoped", "percent": 0,
+                 "scope": {"model": {"display_name": "Fable", "id": null}, "surface": null}}
+            ]
         });
         let w = parse_windows(&body);
-        assert_eq!(w.iter().map(|w| w.id.as_str()).collect::<Vec<_>>(), ["five_hour", "seven_day"]);
-        assert_eq!(w[0].used_percent, 4.5);
-        assert!(w[0].resets_at_ms.is_none());
-        assert!(w[1].resets_at_ms.is_some());
+        assert_eq!(w.iter().map(|w| w.id.as_str()).collect::<Vec<_>>(), ["weekly_all", "weekly_scoped:Fable"]);
+        assert_eq!(w[0].used_percent, 24.0);
+        assert!(w[0].resets_at_ms.is_some());
+    }
+
+    #[test]
+    fn names_the_plan_with_its_tier() {
+        let oauth = serde_json::json!({"subscriptionType": "max", "rateLimitTier": "default_claude_max_20x"});
+        assert_eq!(plan_name(&oauth).as_deref(), Some("max 20x"));
     }
 }

@@ -57,14 +57,18 @@ export function Totals({ usage, range }: { usage: Map<string, ModelUsage>; range
 }
 
 const WINDOW_LABELS: Record<string, string> = {
+  weekly_all: "Weekly",
+  session: "5-hour",
   five_hour: "5-hour",
-  seven_day: "Weekly",
-  seven_day_opus: "Weekly · Opus",
-  seven_day_sonnet: "Weekly · Sonnet",
 };
 
+/** `weekly_scoped:Sonnet` → "Weekly · Sonnet"; unknown kinds are tidied up. */
 function windowLabel(id: string): string {
-  return WINDOW_LABELS[id] ?? id.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+  const [kind, scope] = id.split(":");
+  const base =
+    WINDOW_LABELS[kind] ??
+    (kind.startsWith("weekly") ? "Weekly" : kind.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()));
+  return scope ? `${base} · ${scope}` : base;
 }
 
 function LimitMeter({ label, used, resetsAt }: { label: string; used: number; resetsAt: number | null }) {
