@@ -11,25 +11,50 @@ const MAX_DPR = 2;
 // Backdrop redraws are the costly part; the drift is slow, so 30 fps is plenty.
 const BACKDROP_INTERVAL_MS = 33;
 
-const BLOBS = [
-  { color: "232, 135, 95", x: 0.2, y: 0.18, r: 0.55, dx: 0.06, dy: 0.04, speed: 0.00011 },
-  { color: "63, 207, 158", x: 0.85, y: 0.42, r: 0.5, dx: 0.05, dy: 0.06, speed: 0.00009 },
-  { color: "120, 100, 255", x: 0.3, y: 0.85, r: 0.6, dx: 0.07, dy: 0.04, speed: 0.00007 },
+// Crisp-edged shapes give the glass detail to bend; a soft gradient shows no refraction.
+const SHAPES = [
+  { colors: ["#ff8a5c", "#d9480f"], x: 0.18, y: 0.14, r: 0.34, dx: 0.05, dy: 0.03, speed: 0.00012 },
+  { colors: ["#3fe0b0", "#0b8f6b"], x: 0.92, y: 0.4, r: 0.3, dx: 0.04, dy: 0.05, speed: 0.0001 },
+  { colors: ["#8f7bff", "#3b2bbf"], x: 0.12, y: 0.72, r: 0.38, dx: 0.06, dy: 0.04, speed: 0.00008 },
+  { colors: ["#ffd65c", "#e09a00"], x: 0.78, y: 0.92, r: 0.22, dx: 0.05, dy: 0.03, speed: 0.00014 },
+  { colors: ["#ff5fa2", "#b0105a"], x: 0.62, y: 0.12, r: 0.14, dx: 0.04, dy: 0.04, speed: 0.00016 },
 ];
 
 function drawBackdrop(ctx: OffscreenCanvasRenderingContext2D, w: number, h: number, t: number) {
-  ctx.fillStyle = "#07070b";
+  ctx.fillStyle = "#0b0b12";
   ctx.fillRect(0, 0, w, h);
   const size = Math.max(w, h);
-  for (const [i, b] of BLOBS.entries()) {
-    const phase = t * b.speed + i * 2.1;
-    const cx = (b.x + Math.sin(phase) * b.dx) * w;
-    const cy = (b.y + Math.cos(phase * 1.3) * b.dy) * h;
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, b.r * size);
-    g.addColorStop(0, `rgba(${b.color}, 0.55)`);
-    g.addColorStop(1, `rgba(${b.color}, 0)`);
+
+  // Thin diagonal lines: fine detail that makes refraction visible everywhere.
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+  ctx.lineWidth = Math.max(1, size / 600);
+  const step = size / 28;
+  const drift = ((t * 0.004) % step) - step;
+  ctx.beginPath();
+  for (let x = -h + drift; x < w + h; x += step) {
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x + h, h);
+  }
+  ctx.stroke();
+
+  for (const [i, sh] of SHAPES.entries()) {
+    const phase = t * sh.speed + i * 2.1;
+    const cx = (sh.x + Math.sin(phase) * sh.dx) * w;
+    const cy = (sh.y + Math.cos(phase * 1.3) * sh.dy) * h;
+    const r = sh.r * size;
+    const g = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+    g.addColorStop(0, sh.colors[0]);
+    g.addColorStop(1, sh.colors[1]);
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, w, h);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    // A darker inner ring adds a second edge for the glass to catch.
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.25)";
+    ctx.lineWidth = r * 0.08;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.7, 0, Math.PI * 2);
+    ctx.stroke();
   }
 }
 
@@ -48,17 +73,21 @@ export async function startLiquidGlass(canvas: HTMLCanvasElement, root: HTMLElem
   const core = new WebGpuGlassCore({ device, format });
 
   const scene = new Scene();
+  // Optics follow liquid-dom's Control Center showcase demo.
   const container = new Container({
-    blur: 14,
+    blur: 10,
     spacing: 10,
-    thickness: 40,
-    bezelWidth: 18,
-    dispersion: 0.4,
-    tint: { r: 0.08, g: 0.08, b: 0.12, a: 0.35 },
-    specularStrength: 0.7,
-    shadowColor: { r: 0, g: 0, b: 0, a: 0.35 },
-    shadowBlur: 24,
-    shadowOffsetY: 8,
+    bezelWidth: 44,
+    tint: { r: 1, g: 1, b: 1, a: 0.1 },
+    shadowColor: { r: 0, g: 0, b: 0, a: 0.25 },
+    shadowOffsetY: 14,
+    shadowBlur: 30,
+    specularOpacity: 0.7,
+    specularFalloff: 1,
+    specularWidth: 1,
+    specularStrength: 1,
+    specularSharpness: 3,
+    oppositeSpecularStrength: 0.5,
   });
   scene.add(container);
   const shapes = new Map<Element, Glass>();

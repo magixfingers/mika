@@ -58,6 +58,11 @@ html.liquid .glass {
   backdrop-filter: none;
 }
 
+/* The glass shows vivid shapes behind the text; a soft shadow keeps it legible. */
+html.liquid .app {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
 html.liquid .glass::before {
   display: none;
 }
