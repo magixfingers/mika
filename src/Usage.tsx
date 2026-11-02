@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import type { DayUsage, ModelUsage, Provider, RateLimit, SessionStatus, SessionUsage } from "./types";
 import { Mika, STATE_LABELS } from "./Mika";
 import { CLAUDE_LOGO, OPENAI_LOGO } from "./logos";
@@ -119,10 +120,22 @@ export function Sessions({
   sessions: SessionUsage[];
   statuses: SessionStatus[];
 }) {
+  // Fade the bottom edge only when rows are actually cut off.
+  const listRef = useRef<HTMLUListElement>(null);
+  const [clipped, setClipped] = useState(false);
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const check = () => setClipped(el.scrollHeight > el.clientHeight + 1);
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    check();
+    return () => observer.disconnect();
+  }, [sessions]);
   return (
     <section className="panel sessions">
       <h2>Sessions</h2>
-      <ul className="list">
+      <ul className="list" ref={listRef} data-clipped={clipped || undefined}>
         {sessions.map((s) => {
           const live = s.provider === "claude" ? statuses.find((st) => st.session_id === s.id) : undefined;
           const model = s.models.length === 1 ? s.models[0] : `${s.models.length} models`;

@@ -401,13 +401,16 @@ h2,
 
 /* Sessions take the remaining height and show as many rows as fit. */
 .sessions {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
 }
 
 .sessions .list {
   min-height: 0;
   overflow: hidden;
+}
+
+.sessions .list[data-clipped] {
   mask-image: linear-gradient(black calc(100% - 24px), transparent);
 }
 

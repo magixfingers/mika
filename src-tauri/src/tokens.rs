@@ -14,7 +14,7 @@ use serde_json::Value;
 
 /// Window for the tokens-per-second rate.
 const RATE_WINDOW_MS: i64 = 60_000;
-const MAX_SESSIONS: usize = 8;
+const MAX_SESSIONS: usize = 15;
 const MAX_WALK_DEPTH: usize = 6;
 /// Codex's automatic review runs: counted per model and day, but not as session work.
 const REVIEW_MODEL: &str = "codex-auto-review";
