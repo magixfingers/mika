@@ -349,7 +349,7 @@ h2,
 
 .meter,
 .share {
-  height: 6px;
+  height: 3px;
   border-radius: 9999px;
   background: var(--hairline-soft);
   overflow: hidden;
@@ -366,17 +366,10 @@ h2,
   transition: transform 400ms ease;
 }
 
-.meter span {
-  background: var(--link);
-}
-
+.meter span,
 .share {
   height: 3px;
   margin-top: 6px;
-}
-
-.share::after {
-  background: var(--ink);
 }
 
 /* --- Sessions and agents --- */
