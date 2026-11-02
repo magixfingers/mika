@@ -20,7 +20,7 @@ const SHAPES = [
   { colors: ["#ff5fa2", "#b0105a"], x: 0.62, y: 0.12, r: 0.14, dx: 0.04, dy: 0.04, speed: 0.00016 },
 ];
 
-function drawBackdrop(ctx: OffscreenCanvasRenderingContext2D, w: number, h: number, t: number) {
+function drawBackdrop(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   ctx.fillStyle = "#0b0b12";
   ctx.fillRect(0, 0, w, h);
   const size = Math.max(w, h);
@@ -62,11 +62,16 @@ function drawBackdrop(ctx: OffscreenCanvasRenderingContext2D, w: number, h: numb
  * Starts the glass renderer on `canvas`. Resolves to a stop function, or null
  * when WebGPU is unavailable.
  */
-export async function startLiquidGlass(canvas: HTMLCanvasElement, root: HTMLElement): Promise<(() => void) | null> {
+export async function startLiquidGlass(
+  canvas: HTMLCanvasElement,
+  root: HTMLElement,
+  onError: (message: string) => void,
+): Promise<(() => void) | null> {
   const gpu = (navigator as Navigator & { gpu?: GPU }).gpu;
   const adapter = await gpu?.requestAdapter();
   if (!gpu || !adapter) return null;
   const device = await adapter.requestDevice();
+  device.addEventListener("uncapturederror", (e) => onError((e as GPUUncapturedErrorEvent).error.message));
   const context = canvas.getContext("webgpu");
   if (!context) return null;
   const format = gpu.getPreferredCanvasFormat();
@@ -98,7 +103,8 @@ export async function startLiquidGlass(canvas: HTMLCanvasElement, root: HTMLElem
   let dpr = 1;
   let output: GPUTexture | null = null;
   let backdrop: GPUTexture | null = null;
-  let backdropCanvas: OffscreenCanvas | null = null;
+  // A DOM canvas, not OffscreenCanvas: WebKit copies it to WebGPU more reliably.
+  let backdropCanvas: HTMLCanvasElement | null = null;
   let lastBackdrop = -Infinity;
   let raf = 0;
 
@@ -123,7 +129,9 @@ export async function startLiquidGlass(canvas: HTMLCanvasElement, root: HTMLElem
       GPUTextureUsage.COPY_DST;
     output = device.createTexture({ size: [width, height], format, usage });
     backdrop = device.createTexture({ size: [width, height], format, usage });
-    backdropCanvas = new OffscreenCanvas(width, height);
+    backdropCanvas = document.createElement("canvas");
+    backdropCanvas.width = width;
+    backdropCanvas.height = height;
     lastBackdrop = -Infinity;
   };
 

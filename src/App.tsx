@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { LogicalSize } from "@tauri-apps/api/dpi";
 import type { Agent, AgentState, SessionStatus, Snapshot, TokenStats } from "./types";
 import { Mika, STATE_LABELS } from "./Mika";
 import { Activity, Limits, Models, ProviderMark, RangePicker, Sessions, Totals, usageIn, type Range } from "./Usage";
@@ -118,7 +120,8 @@ function App() {
     if (!canvas || !main) return;
     let stop: (() => void) | null = null;
     let cancelled = false;
-    startLiquidGlass(canvas, main)
+    const report = (message: string) => invoke("log_frontend", { message });
+    startLiquidGlass(canvas, main, (m) => report(`WebGPU error: ${m}`))
       .then((s) => {
         // Unmounted while WebGPU was starting.
         if (cancelled) return s?.();
@@ -164,6 +167,21 @@ function App() {
     agent.kind === "claude" ? mostUrgent(statuses.filter((s) => s.cwd === agent.cwd)) : null;
   const overall = mostUrgent(statuses);
   const usage = useMemo(() => usageIn(tokens?.days ?? [], range), [tokens, range]);
+
+  // On first load, grow the window so the whole overview shows without scrolling.
+  const fitted = useRef(false);
+  useEffect(() => {
+    if (fitted.current || tokens === null) return;
+    fitted.current = true;
+    requestAnimationFrame(() => {
+      const page = mainRef.current?.querySelector<HTMLElement>(".page-overview");
+      if (!page) return;
+      const missing = page.scrollHeight - page.clientHeight;
+      if (missing <= 0) return;
+      const height = Math.min(window.innerHeight + missing + 8, window.screen.availHeight - 24);
+      getCurrentWindow().setSize(new LogicalSize(window.innerWidth, height));
+    });
+  }, [tokens]);
 
   return (
     <>
