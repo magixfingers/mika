@@ -330,6 +330,17 @@ h2,
   text-transform: capitalize;
 }
 
+.limit-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.limit-group + .limit-group {
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+}
+
 .limit {
   display: flex;
   flex-direction: column;

@@ -1,3 +1,4 @@
+mod claude_limits;
 mod sampler;
 mod status;
 mod tokens;
@@ -6,6 +7,7 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
+use claude_limits::ClaudeLimits;
 use sampler::{Sampler, Snapshot};
 use status::{AgentState, SessionStatus, Tracker};
 use tokens::{TokenScanner, TokenStats};
@@ -16,6 +18,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(2);
 /// Token logs change less often than processes, and a scan touches many files.
 const TOKEN_SCAN_INTERVAL: Duration = Duration::from_secs(5);
+/// Claude Code's own usage view polls about this often; limits move slowly.
+const CLAUDE_LIMITS_INTERVAL: Duration = Duration::from_secs(300);
 const TRAY_ID: &str = "mika-tray";
 
 /// The latest snapshot, so a window that opens between samples has data at once.
@@ -28,6 +32,14 @@ struct Statuses(Mutex<Tracker>);
 
 #[tauri::command]
 fn latest_snapshot(latest: State<'_, Latest>) -> Option<Snapshot> {
+    latest.0.lock().ok().and_then(|s| s.clone())
+}
+
+#[derive(Default)]
+struct LatestClaudeLimits(Mutex<Option<ClaudeLimits>>);
+
+#[tauri::command]
+fn claude_limits(latest: State<'_, LatestClaudeLimits>) -> Option<ClaudeLimits> {
     latest.0.lock().ok().and_then(|s| s.clone())
 }
 
@@ -145,6 +157,30 @@ fn spawn_token_scanner(app: AppHandle) {
     });
 }
 
+fn spawn_claude_limits(app: AppHandle) {
+    thread::spawn(move || {
+        let mut last_error = None;
+        loop {
+            match claude_limits::fetch() {
+                Ok(limits) => {
+                    last_error = None;
+                    let _ = app.emit("claude_limits", &limits);
+                    if let Ok(mut latest) = app.state::<LatestClaudeLimits>().0.lock() {
+                        *latest = Some(limits);
+                    }
+                }
+                // Log each distinct failure once rather than every poll.
+                Err(err) if last_error.as_ref() != Some(&err) => {
+                    eprintln!("mika: Claude limits unavailable: {err}");
+                    last_error = Some(err);
+                }
+                Err(_) => {}
+            }
+            thread::sleep(CLAUDE_LIMITS_INTERVAL);
+        }
+    });
+}
+
 fn spawn_hook_listener(app: AppHandle) {
     thread::spawn(move || {
         let result = status::serve(|event| {
@@ -166,7 +202,8 @@ pub fn run() {
         .manage(Latest::default())
         .manage(Statuses::default())
         .manage(LatestTokens::default())
-        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens, log_frontend])
+        .manage(LatestClaudeLimits::default())
+        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens, claude_limits, log_frontend])
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "Show Mika", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Mika", true, None::<&str>)?;
@@ -199,6 +236,7 @@ pub fn run() {
             spawn_sampler(app.handle().clone());
             spawn_hook_listener(app.handle().clone());
             spawn_token_scanner(app.handle().clone());
+            spawn_claude_limits(app.handle().clone());
             Ok(())
         })
         .on_window_event(|window, event| {

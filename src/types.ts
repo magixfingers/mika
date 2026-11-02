@@ -79,3 +79,16 @@ export interface TokenStats {
   codex_limit: RateLimit | null;
   tokens_per_sec: number;
 }
+
+// Mirrors src-tauri/src/claude_limits.rs.
+
+export interface LimitWindow {
+  id: string;
+  used_percent: number;
+  resets_at_ms: number | null;
+}
+
+export interface ClaudeLimits {
+  plan: string | null;
+  windows: LimitWindow[];
+}

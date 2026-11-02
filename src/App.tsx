@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
-import type { Agent, AgentState, SessionStatus, Snapshot, TokenStats } from "./types";
+import type { Agent, AgentState, ClaudeLimits, SessionStatus, Snapshot, TokenStats } from "./types";
 import { Mika, STATE_LABELS } from "./Mika";
 import { Activity, Limits, Models, ProviderMark, RangePicker, Sessions, Totals, usageIn, type Range } from "./Usage";
 import { compact, formatBytes, formatUptime, shortPath } from "./format";
@@ -112,6 +112,7 @@ function App() {
   const [history, setHistory] = useState<Record<number, number[]>>({});
   const [statuses, setStatuses] = useState<SessionStatus[]>([]);
   const [tokens, setTokens] = useState<TokenStats | null>(null);
+  const [claudeLimits, setClaudeLimits] = useState<ClaudeLimits | null>(null);
   const [range, setRange] = useState<Range>("day");
 
   useEffect(() => {
@@ -151,10 +152,12 @@ function App() {
     invoke<Snapshot | null>("latest_snapshot").then((s) => s && apply(s));
     invoke<SessionStatus[]>("session_statuses").then(setStatuses);
     invoke<TokenStats | null>("latest_tokens").then((t) => t && setTokens(t));
+    invoke<ClaudeLimits | null>("claude_limits").then(setClaudeLimits);
     const unlisteners = [
       listen<Snapshot>("agents", (event) => apply(event.payload)),
       listen<SessionStatus[]>("statuses", (event) => setStatuses(event.payload)),
       listen<TokenStats>("tokens", (event) => setTokens(event.payload)),
+      listen<ClaudeLimits>("claude_limits", (event) => setClaudeLimits(event.payload)),
     ];
     return () => {
       unlisteners.forEach((u) => u.then((fn) => fn()));
@@ -206,7 +209,7 @@ function App() {
             ) : (
               <>
                 <Totals usage={usage} range={range} />
-                <Limits codex={tokens.codex_limit} />
+                <Limits codex={tokens.codex_limit} claude={claudeLimits} />
                 <Models usage={usage} />
                 <Activity days={tokens.days} />
               </>

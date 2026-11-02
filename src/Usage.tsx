@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import type { DayUsage, ModelUsage, Provider, RateLimit, SessionStatus, SessionUsage } from "./types";
+import type { ClaudeLimits, DayUsage, ModelUsage, Provider, RateLimit, SessionStatus, SessionUsage } from "./types";
 import { Mika, STATE_LABELS } from "./Mika";
 import { CLAUDE_LOGO, OPENAI_LOGO } from "./logos";
 import { compact, folderName, formatCost, localDate, timeAgo, timeUntil } from "./format";
@@ -56,30 +56,69 @@ export function Totals({ usage, range }: { usage: Map<string, ModelUsage>; range
   );
 }
 
-export function Limits({ codex }: { codex: RateLimit | null }) {
-  if (!codex) return null;
-  const left = Math.max(0, 100 - codex.used_percent);
-  const window = codex.window_minutes >= 10080 ? "Weekly" : `${Math.round(codex.window_minutes / 60)}-hour`;
+const WINDOW_LABELS: Record<string, string> = {
+  five_hour: "5-hour",
+  seven_day: "Weekly",
+  seven_day_opus: "Weekly · Opus",
+  seven_day_sonnet: "Weekly · Sonnet",
+};
+
+function windowLabel(id: string): string {
+  return WINDOW_LABELS[id] ?? id.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
+
+function LimitMeter({ label, used, resetsAt }: { label: string; used: number; resetsAt: number | null }) {
+  const left = Math.min(100, Math.max(0, 100 - used));
+  return (
+    <div className="limit">
+      <div className="meter" style={{ "--fill": left / 100 } as React.CSSProperties}>
+        <span />
+      </div>
+      <div className="row small">
+        <span className="muted">
+          {label}
+          {resetsAt ? ` · resets in ${timeUntil(resetsAt)}` : ""}
+        </span>
+        <span>{left.toFixed(0)}% left</span>
+      </div>
+    </div>
+  );
+}
+
+function LimitHeader({ provider, plan }: { provider: Provider; plan: string | null }) {
+  return (
+    <div className="row">
+      <span className="name">
+        <ProviderMark provider={provider} /> {provider === "claude" ? "Claude" : "Codex"}
+      </span>
+      {plan && <span className="muted plan">{plan}</span>}
+    </div>
+  );
+}
+
+export function Limits({ codex, claude }: { codex: RateLimit | null; claude: ClaudeLimits | null }) {
+  if (!codex && !claude?.windows.length) return null;
   return (
     <section className="panel">
       <h2>Limits</h2>
-      <div className="limit">
-        <div className="row">
-          <span className="name">
-            <ProviderMark provider="codex" /> Codex
-          </span>
-          {codex.plan && <span className="muted plan">{codex.plan}</span>}
+      {codex && (
+        <div className="limit-group">
+          <LimitHeader provider="codex" plan={codex.plan} />
+          <LimitMeter
+            label={codex.window_minutes >= 10080 ? "Weekly" : `${Math.round(codex.window_minutes / 60)}-hour`}
+            used={codex.used_percent}
+            resetsAt={codex.resets_at_ms}
+          />
         </div>
-        <div className="meter" style={{ "--fill": left / 100 } as React.CSSProperties}>
-          <span />
+      )}
+      {claude && claude.windows.length > 0 && (
+        <div className="limit-group">
+          <LimitHeader provider="claude" plan={claude.plan} />
+          {claude.windows.map((w) => (
+            <LimitMeter key={w.id} label={windowLabel(w.id)} used={w.used_percent} resetsAt={w.resets_at_ms} />
+          ))}
         </div>
-        <div className="row small">
-          <span className="muted">
-            {window} · resets in {timeUntil(codex.resets_at_ms)}
-          </span>
-          <span>{left.toFixed(0)}% left</span>
-        </div>
-      </div>
+      )}
     </section>
   );
 }
