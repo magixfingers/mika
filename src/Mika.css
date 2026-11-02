@@ -6,7 +6,7 @@
 
 .mika-thinking,
 .mika-working {
-  --mika-color: var(--claude);
+  --mika-color: var(--link);
 }
 
 .mika-waiting {
@@ -14,7 +14,7 @@
 }
 
 .mika-done {
-  --mika-color: var(--codex);
+  --mika-color: var(--cyan);
 }
 
 .mika-shape {

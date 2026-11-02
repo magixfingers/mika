@@ -1,27 +1,37 @@
+/* Tokens follow the Vercel Geist analysis in DESIGN-vercel.md: ink on a
+   near-white canvas, hairline cards, Geist Mono eyebrows, and color only in
+   the mesh gradient behind the totals. Liquid glass is kept for the floating
+   range switch and tab bar. */
 :root {
-  color-scheme: dark;
-  --bg: #07070b;
-  --text: #f2f2f7;
-  --muted: rgba(235, 235, 245, 0.55);
-  --card: #1a1a22;
-  --claude: #e8875f;
-  --codex: #3fcf9e;
-  --alert: #ff5f6d;
+  color-scheme: light;
+  --ink: #171717;
+  --body: #4d4d4d;
+  --mute: #8f8f8f;
+  --faint: #a1a1a1;
+  --hairline: #ebebeb;
+  --hairline-soft: #f2f2f2;
+  --canvas: #fafafa;
+  --elevated: #ffffff;
+  --link: #0070f3;
+  --error: #ee0000;
+  --violet: #7928ca;
+  --cyan: #50e3c2;
 
-  --glass-fill: linear-gradient(160deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.04) 55%, rgba(255, 255, 255, 0.07));
-  --glass-edge: rgba(255, 255, 255, 0.16);
-  --glass-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.05),
-    inset 0 0 24px rgba(255, 255, 255, 0.03),
-    0 12px 32px rgba(0, 0, 0, 0.35);
+  /* Aliases used by Mika.css. */
+  --text: var(--ink);
+  --muted: var(--mute);
+  --card: var(--elevated);
+  --alert: var(--error);
 
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
-  /* Text grows with the window but never drops below a comfortable size. */
-  font-size: clamp(14px, 0.8rem + 0.6vw, 17px);
-  line-height: 1.4;
-  color: var(--text);
-  background: var(--bg);
+  --sans: "Geist Variable", Inter, Arial, sans-serif;
+  --mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  font-family: var(--sans);
+  /* body-md, growing slightly with the window. */
+  font-size: clamp(14px, 0.78rem + 0.5vw, 16px);
+  line-height: 1.43;
+  color: var(--ink);
+  background: var(--canvas);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -31,12 +41,24 @@
 
 body {
   margin: 0;
-  background: var(--bg);
-  /* The layout scales to fit the window instead of scrolling. */
+  background: var(--canvas);
+  /* No scrollbar: pages are sized to fit (see .pages). */
   overflow: hidden;
 }
 
-/* WebGPU glass draws the color field itself, behind the DOM. */
+button {
+  font: inherit;
+  color: inherit;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+/* --- Backdrop: WebGPU canvas, with a CSS mesh as the no-WebGPU fallback --- */
+
 .liquid-canvas {
   position: fixed;
   inset: 0;
@@ -45,11 +67,35 @@ body {
   height: 100vh;
 }
 
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(30% 22% at 18% 16%, rgba(0, 124, 240, 0.28), transparent 70%),
+    radial-gradient(28% 20% at 50% 10%, rgba(80, 227, 194, 0.3), transparent 70%),
+    radial-gradient(30% 22% at 82% 18%, rgba(255, 0, 128, 0.22), transparent 70%),
+    radial-gradient(26% 18% at 64% 30%, rgba(249, 203, 40, 0.22), transparent 70%),
+    var(--canvas);
+}
+
 html.liquid .backdrop {
   display: none;
 }
 
-/* With WebGPU glass, the DOM panels only carry content. */
+/* --- Glass: only the floating controls --- */
+
+.glass {
+  position: relative;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--hairline);
+  box-shadow:
+    0 2px 2px rgba(0, 0, 0, 0.04),
+    0 8px 16px -4px rgba(0, 0, 0, 0.08);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+}
+
 html.liquid .glass {
   background: none;
   border-color: transparent;
@@ -58,69 +104,12 @@ html.liquid .glass {
   backdrop-filter: none;
 }
 
-/* The glass shows vivid shapes behind the text; a soft shadow keeps it legible. */
-html.liquid .app {
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
-}
-
-html.liquid .glass::before {
-  display: none;
-}
-
-button {
-  font: inherit;
-  color: inherit;
-}
-
-/* Slow-moving color fields behind the glass give it something to refract. */
-.backdrop {
-  position: fixed;
-  inset: -20%;
-  z-index: -1;
-  background:
-    radial-gradient(38% 30% at 20% 18%, rgba(232, 135, 95, 0.55), transparent 70%),
-    radial-gradient(34% 28% at 85% 40%, rgba(63, 207, 158, 0.4), transparent 70%),
-    radial-gradient(40% 32% at 35% 85%, rgba(120, 100, 255, 0.45), transparent 70%),
-    var(--bg);
-  filter: blur(30px);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .backdrop {
-    animation: drift 40s ease-in-out infinite alternate;
-  }
-}
-
-@keyframes drift {
-  to {
-    transform: translate(6%, -4%) rotate(8deg) scale(1.08);
-  }
-}
-
-.glass {
-  position: relative;
-  background: var(--glass-fill);
-  border: 1px solid var(--glass-edge);
-  box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  backdrop-filter: blur(28px) saturate(180%);
-}
-
-/* Specular sheen along the top edge. */
-.glass::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(120% 60% at 15% 0%, rgba(255, 255, 255, 0.16), transparent 50%);
-  pointer-events: none;
-}
+/* --- Layout --- */
 
 .app {
-  /* Top padding clears the overlay traffic lights. */
   height: 100vh;
   /* Top padding clears the overlay traffic lights. */
-  padding: 36px 14px 14px;
+  padding: 36px 16px 16px;
   display: grid;
   grid-template-rows: auto 1fr auto;
   gap: 12px;
@@ -136,7 +125,7 @@ button {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   overflow: hidden;
 }
 
@@ -148,7 +137,7 @@ button {
 @media (min-width: 760px) {
   .pages {
     grid-template-columns: 1fr 1fr;
-    gap: 14px;
+    gap: 16px;
   }
 
   .pages .page {
@@ -158,47 +147,6 @@ button {
   .tabbar button {
     display: none;
   }
-}
-
-.tabbar {
-  border-radius: 999px;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.tabbar button {
-  border: 0;
-  background: none;
-  padding: 0.45em 1em;
-  border-radius: 999px;
-  font-weight: 500;
-  color: var(--muted);
-  cursor: pointer;
-  transition: background 200ms ease, color 200ms ease;
-}
-
-.tabbar button[aria-current="page"] {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.16);
-}
-
-.tabbar .rate {
-  margin-left: auto;
-  padding-right: 0.8em;
-}
-
-/* Sessions take the remaining height and show as many rows as fit. */
-.sessions {
-  flex: 1;
-  min-height: 0;
-}
-
-.sessions .list {
-  min-height: 0;
-  overflow: hidden;
-  mask-image: linear-gradient(black calc(100% - 24px), transparent);
 }
 
 .app-header {
@@ -214,31 +162,33 @@ button {
   gap: 10px;
 }
 
+/* heading-md */
 h1 {
-  margin: 0;
-  font-size: 1.35rem;
-  letter-spacing: -0.01em;
-}
-
-h2 {
-  margin: 0;
-  font-size: 0.85rem;
+  font-size: 1.43rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
+  line-height: 1.4;
+  letter-spacing: -0.02em;
 }
 
-p {
-  margin: 0;
+/* mono-eyebrow */
+h2,
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.33;
+  text-transform: uppercase;
+  color: var(--mute);
 }
 
 .muted {
-  color: var(--muted);
+  color: var(--mute);
 }
 
+/* body-sm */
 .small {
-  font-size: 0.85rem;
+  font-size: 0.86rem;
+  line-height: 1.33;
 }
 
 .num {
@@ -258,69 +208,95 @@ p {
   text-align: center;
 }
 
-.segmented {
+/* --- Controls: category pills, active state in ink --- */
+
+.segmented,
+.tabbar {
   display: flex;
-  padding: 3px;
-  border-radius: 999px;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 64px;
+}
+
+.segmented button,
+.tabbar button {
+  border: 0;
+  background: none;
+  height: 2.1em;
+  padding: 0 14px;
+  border-radius: 64px;
+  font-weight: 500;
+  color: var(--body);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
 }
 
 .segmented button {
-  position: relative;
-  border: 0;
-  background: none;
-  padding: 5px 11px;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--muted);
-  cursor: pointer;
-  transition: background 200ms ease, color 200ms ease;
+  font-size: 0.86rem;
+  padding: 0 11px;
 }
 
-.segmented button[aria-selected="true"] {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.16);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+.segmented button[aria-selected="true"],
+.tabbar button[aria-current="page"] {
+  background: var(--ink);
+  color: #fff;
 }
+
+.tabbar .rate {
+  margin-left: auto;
+  padding-right: 12px;
+}
+
+.rate {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Totals: the hero, over the mesh gradient --- */
 
 .totals {
-  padding: 6px 4px 2px;
+  padding: 8px 2px 4px;
 }
 
-.eyebrow {
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
+/* display-xl */
 .total-tokens {
-  font-size: clamp(2rem, 9vw, 3.2rem);
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-size: clamp(2.2rem, 10vw, 3.4rem);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.05em;
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-  margin: 2px 0;
+  margin: 6px 0;
   word-break: break-all;
 }
 
 .total-compact {
-  font-size: 1rem;
-  font-weight: 500;
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  font-weight: 400;
   letter-spacing: 0;
-  color: var(--muted);
+  color: var(--mute);
   margin-left: 8px;
 }
 
 .total-cost {
-  font-size: 1.05rem;
+  font-size: 1.07rem;
+  font-weight: 500;
+  color: var(--body);
   font-variant-numeric: tabular-nums;
 }
 
+/* --- Cards: feature-card, flat hairline --- */
+
 .panel {
-  border-radius: 20px;
-  padding: 10px 12px;
+  background: var(--elevated);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 10px;
 }
 
 .list {
@@ -329,7 +305,7 @@ p {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 10px;
 }
 
 .name {
@@ -340,13 +316,14 @@ p {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--ink);
 }
 
 .mark {
   flex: none;
   width: 1.1em;
   height: 1.1em;
-  fill: currentColor;
+  fill: var(--ink);
 }
 
 .plan {
@@ -362,8 +339,8 @@ p {
 .meter,
 .share {
   height: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  background: var(--hairline-soft);
   overflow: hidden;
 }
 
@@ -379,21 +356,19 @@ p {
 }
 
 .meter span {
-  background: var(--codex);
+  background: var(--link);
 }
 
 .share {
   height: 3px;
-  margin-top: 5px;
+  margin-top: 6px;
 }
 
-.share-claude::after {
-  background: var(--claude);
+.share::after {
+  background: var(--ink);
 }
 
-.share-codex::after {
-  background: var(--codex);
-}
+/* --- Sessions and agents --- */
 
 .session,
 .agent-header {
@@ -401,6 +376,14 @@ p {
   align-items: center;
   gap: 10px;
   min-width: 0;
+}
+
+/* Fixed slot so titles line up whether the row shows a logo or Mika. */
+.lead {
+  flex: none;
+  width: 24px;
+  display: flex;
+  justify-content: center;
 }
 
 .session-text {
@@ -416,16 +399,16 @@ p {
   white-space: nowrap;
 }
 
-.agent {
-  --accent: var(--muted);
+/* Sessions take the remaining height and show as many rows as fit. */
+.sessions {
+  flex: 1;
+  min-height: 0;
 }
 
-.agent-claude {
-  --accent: var(--claude);
-}
-
-.agent-codex {
-  --accent: var(--codex);
+.sessions .list {
+  min-height: 0;
+  overflow: hidden;
+  mask-image: linear-gradient(black calc(100% - 24px), transparent);
 }
 
 .agent-header {
@@ -445,7 +428,7 @@ p {
 
 .sparkline polyline {
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--link);
   stroke-width: 1.5;
 }
 
@@ -457,36 +440,37 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
+/* code-block style for the process table */
 .proc-tree {
   width: 100%;
   margin-top: 8px;
   border-collapse: collapse;
-  font-size: 0.8rem;
+  font-family: var(--mono);
+  font-size: 0.78rem;
 }
 
 .proc-tree th {
   text-align: left;
-  color: var(--muted);
+  color: var(--mute);
   font-weight: 500;
   padding: 4px;
 }
 
 .proc-tree td {
   padding: 3px 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid var(--hairline);
   white-space: nowrap;
   max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.proc-tree th:not(:first-child) {
-  text-align: right;
-}
-
+.proc-tree th:not(:first-child),
 .proc-tree .num {
   text-align: right;
 }
+
+/* --- Activity and trend --- */
 
 .heatmap {
   display: grid;
@@ -498,8 +482,8 @@ p {
 .cell {
   aspect-ratio: 1;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.06);
-  background-image: linear-gradient(rgba(108, 160, 255, var(--level)), rgba(108, 160, 255, var(--level)));
+  background: var(--hairline-soft);
+  background-image: linear-gradient(rgba(0, 112, 243, var(--level)), rgba(0, 112, 243, var(--level)));
 }
 
 .cell[data-hidden] {
@@ -509,8 +493,9 @@ p {
 .axis {
   position: relative;
   height: 1.2em;
-  font-size: 0.78rem;
-  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--mute);
 }
 
 .months span {
@@ -536,14 +521,9 @@ p {
 
 .trend path {
   fill: none;
-  stroke: #6ca0ff;
+  stroke: var(--link);
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
-}
-
-.rate {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }

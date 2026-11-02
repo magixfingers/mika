@@ -43,6 +43,8 @@ export function timeUntil(ms: number, now = Date.now()): string {
 
 export function shortPath(path: string | null): string {
   if (!path) return "unknown folder";
+  // App-launched agents (e.g. Codex from the ChatGPT app) run from / or ~.
+  if (path === "/" || /^\/Users\/[^/]+\/?$/.test(path)) return "no project folder";
   return path.replace(/^\/Users\/[^/]+/, "~");
 }
 

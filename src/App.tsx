@@ -54,7 +54,7 @@ function AgentRow({ agent, history, status }: { agent: Agent; history: number[];
   return (
     <li className={`agent agent-${agent.kind}`}>
       <button className="agent-header" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
-        {status ? <Mika state={status.state} size={22} /> : <ProviderMark provider={agent.kind} />}
+        <span className="lead">{status ? <Mika state={status.state} size={22} /> : <ProviderMark provider={agent.kind} />}</span>
         <div className="session-text">
           <span className="name">{AGENT_LABELS[agent.kind]}</span>
           <span className="muted small">
@@ -214,7 +214,7 @@ function App() {
           </div>
 
           <div className="page page-agents">
-            <section className="glass panel">
+            <section className="panel">
               <div className="row">
                 <h2>Running</h2>
                 <span className="muted small">

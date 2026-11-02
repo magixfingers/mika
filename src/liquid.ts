@@ -3,7 +3,7 @@
 //
 // Mika's WebView can't copy live DOM into GPU textures (that needs Chrome's
 // HTML-in-Canvas flag), so text stays in the DOM on top. This draws only the
-// color field and a glass shape under every `.glass` element.
+// color field and a glass shape under every `.glass` element (the floating controls).
 
 import { Container, Glass, Scene, WebGpuGlassCore } from "@liquid-dom/core";
 
@@ -11,50 +11,31 @@ const MAX_DPR = 2;
 // Backdrop redraws are the costly part; the drift is slow, so 30 fps is plenty.
 const BACKDROP_INTERVAL_MS = 33;
 
-// Crisp-edged shapes give the glass detail to bend; a soft gradient shows no refraction.
-const SHAPES = [
-  { colors: ["#ff8a5c", "#d9480f"], x: 0.18, y: 0.14, r: 0.34, dx: 0.05, dy: 0.03, speed: 0.00012 },
-  { colors: ["#3fe0b0", "#0b8f6b"], x: 0.92, y: 0.4, r: 0.3, dx: 0.04, dy: 0.05, speed: 0.0001 },
-  { colors: ["#8f7bff", "#3b2bbf"], x: 0.12, y: 0.72, r: 0.38, dx: 0.06, dy: 0.04, speed: 0.00008 },
-  { colors: ["#ffd65c", "#e09a00"], x: 0.78, y: 0.92, r: 0.22, dx: 0.05, dy: 0.03, speed: 0.00014 },
-  { colors: ["#ff5fa2", "#b0105a"], x: 0.62, y: 0.12, r: 0.14, dx: 0.04, dy: 0.04, speed: 0.00016 },
+// The Vercel mesh: develop, preview and ship gradient stops blooming behind the
+// totals, the only color on the page. Positions are relative to the hero box.
+const MESH = [
+  { color: "0, 124, 240", x: 0.1, y: 0.35, r: 0.55, a: 0.32 },
+  { color: "80, 227, 194", x: 0.42, y: 0.1, r: 0.5, a: 0.34 },
+  { color: "121, 40, 202", x: 0.68, y: 0.55, r: 0.45, a: 0.22 },
+  { color: "255, 0, 128", x: 0.9, y: 0.25, r: 0.45, a: 0.26 },
+  { color: "249, 203, 40", x: 0.55, y: 0.95, r: 0.4, a: 0.24 },
 ];
 
-function drawBackdrop(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
-  ctx.fillStyle = "#0b0b12";
+type Box = { x: number; y: number; w: number; h: number };
+
+function drawBackdrop(ctx: CanvasRenderingContext2D, w: number, h: number, hero: Box, t: number) {
+  ctx.fillStyle = "#fafafa";
   ctx.fillRect(0, 0, w, h);
-  const size = Math.max(w, h);
-
-  // Thin diagonal lines: fine detail that makes refraction visible everywhere.
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
-  ctx.lineWidth = Math.max(1, size / 600);
-  const step = size / 28;
-  const drift = ((t * 0.004) % step) - step;
-  ctx.beginPath();
-  for (let x = -h + drift; x < w + h; x += step) {
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x + h, h);
-  }
-  ctx.stroke();
-
-  for (const [i, sh] of SHAPES.entries()) {
-    const phase = t * sh.speed + i * 2.1;
-    const cx = (sh.x + Math.sin(phase) * sh.dx) * w;
-    const cy = (sh.y + Math.cos(phase * 1.3) * sh.dy) * h;
-    const r = sh.r * size;
-    const g = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
-    g.addColorStop(0, sh.colors[0]);
-    g.addColorStop(1, sh.colors[1]);
+  const size = Math.max(hero.w, hero.h * 2);
+  for (const [i, m] of MESH.entries()) {
+    const phase = t * 0.00012 + i * 1.7;
+    const cx = hero.x + (m.x + Math.sin(phase) * 0.05) * hero.w;
+    const cy = hero.y + (m.y + Math.cos(phase * 1.3) * 0.08) * hero.h;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, m.r * size);
+    g.addColorStop(0, `rgba(${m.color}, ${m.a})`);
+    g.addColorStop(1, `rgba(${m.color}, 0)`);
     ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
-    // A darker inner ring adds a second edge for the glass to catch.
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.25)";
-    ctx.lineWidth = r * 0.08;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.7, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.fillRect(0, 0, w, h);
   }
 }
 
@@ -78,13 +59,13 @@ export async function startLiquidGlass(
   const core = new WebGpuGlassCore({ device, format });
 
   const scene = new Scene();
-  // Optics follow liquid-dom's Control Center showcase demo.
+  // Optics follow liquid-dom's Control Center showcase demo, tinted for a light canvas.
   const container = new Container({
     blur: 10,
     spacing: 10,
-    bezelWidth: 44,
-    tint: { r: 1, g: 1, b: 1, a: 0.1 },
-    shadowColor: { r: 0, g: 0, b: 0, a: 0.25 },
+    bezelWidth: 20,
+    tint: { r: 1, g: 1, b: 1, a: 0.55 },
+    shadowColor: { r: 0, g: 0, b: 0, a: 0.12 },
     shadowOffsetY: 14,
     shadowBlur: 30,
     specularOpacity: 0.7,
@@ -170,7 +151,11 @@ export async function startLiquidGlass(
     if (now - lastBackdrop >= BACKDROP_INTERVAL_MS && (!reduceMotion.matches || lastBackdrop < 0)) {
       const ctx = backdropCanvas.getContext("2d");
       if (ctx) {
-        drawBackdrop(ctx, width, height, reduceMotion.matches ? 0 : now);
+        const r = root.querySelector(".totals")?.getBoundingClientRect();
+        const hero = r
+          ? { x: r.left * dpr, y: r.top * dpr, w: r.width * dpr, h: r.height * dpr }
+          : { x: 0, y: 0, w: width, h: height * 0.3 };
+        drawBackdrop(ctx, width, height, hero, reduceMotion.matches ? 0 : now);
         device.queue.copyExternalImageToTexture({ source: backdropCanvas }, { texture: backdrop }, [width, height]);
       }
       lastBackdrop = now;

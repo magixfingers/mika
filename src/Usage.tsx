@@ -60,7 +60,7 @@ export function Limits({ codex }: { codex: RateLimit | null }) {
   const left = Math.max(0, 100 - codex.used_percent);
   const window = codex.window_minutes >= 10080 ? "Weekly" : `${Math.round(codex.window_minutes / 60)}-hour`;
   return (
-    <section className="glass panel">
+    <section className="panel">
       <h2>Limits</h2>
       <div className="limit">
         <div className="row">
@@ -87,7 +87,7 @@ export function Models({ usage }: { usage: Map<string, ModelUsage> }) {
   const rows = [...usage.entries()].sort((a, b) => b[1].tokens - a[1].tokens).slice(0, 6);
   const total = rows.reduce((s, [, u]) => s + u.tokens, 0) || 1;
   return (
-    <section className="glass panel">
+    <section className="panel">
       <h2>Models</h2>
       {rows.length === 0 && <p className="muted">No usage in this range.</p>}
       <ul className="list">
@@ -120,7 +120,7 @@ export function Sessions({
   statuses: SessionStatus[];
 }) {
   return (
-    <section className="glass panel sessions">
+    <section className="panel sessions">
       <h2>Sessions</h2>
       <ul className="list">
         {sessions.map((s) => {
@@ -131,7 +131,7 @@ export function Sessions({
             .join(" · ");
           return (
             <li key={`${s.provider}:${s.id}`} className="session">
-              {live ? <Mika state={live.state} size={22} /> : <ProviderMark provider={s.provider} />}
+              <span className="lead">{live ? <Mika state={live.state} size={22} /> : <ProviderMark provider={s.provider} />}</span>
               <div className="session-text">
                 <span className="name">{s.title ?? folderName(s.cwd) ?? s.id.slice(0, 13)}</span>
                 <span className="muted small">{live ? `${STATE_LABELS[live.state]} · ${meta}` : meta}</span>
@@ -202,7 +202,7 @@ export function Activity({ days }: { days: DayUsage[] }) {
   const md = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
 
   return (
-    <section className="glass panel activity">
+    <section className="panel activity">
       <div className="row">
         <h2>Activity</h2>
         <span className="muted small">{active} active days</span>
