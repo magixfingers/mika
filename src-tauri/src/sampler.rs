@@ -93,6 +93,7 @@ fn build_snapshot(sys: &System) -> Snapshot {
         .filter(|(pid, _)| !has_agent_ancestor(sys, **pid, &kinds))
         .filter_map(|(pid, kind)| build_agent(sys, *pid, *kind, &children))
         .collect();
+    agents = merge_codex_siblings(agents);
     agents.sort_by_key(|a| a.pid);
 
     Snapshot {
@@ -102,6 +103,42 @@ fn build_snapshot(sys: &System) -> Snapshot {
             .unwrap_or(0),
         agents,
     }
+}
+
+/// The ChatGPT app runs Codex as sibling processes (`codex app-server` plus
+/// `codex exec-server`), so Codex roots with the same parent are one agent,
+/// named after the process using the most memory. Claude roots stay separate:
+/// the Claude app starts one process per independent session.
+fn merge_codex_siblings(agents: Vec<Agent>) -> Vec<Agent> {
+    let mut out: Vec<Agent> = Vec::new();
+    let mut by_parent: HashMap<u32, usize> = HashMap::new();
+    for agent in agents {
+        let parent = agent.processes.first().and_then(|p| p.ppid);
+        let slot = match (agent.kind, parent) {
+            (AgentKind::Codex, Some(ppid)) => by_parent.get(&ppid).copied(),
+            _ => None,
+        };
+        match slot {
+            Some(i) => {
+                let merged = &mut out[i];
+                if agent.memory > merged.memory {
+                    merged.pid = agent.pid;
+                    merged.cwd = agent.cwd.clone();
+                    merged.uptime_secs = agent.uptime_secs;
+                }
+                merged.cpu += agent.cpu;
+                merged.memory += agent.memory;
+                merged.processes.extend(agent.processes);
+            }
+            None => {
+                if let (AgentKind::Codex, Some(ppid)) = (agent.kind, parent) {
+                    by_parent.insert(ppid, out.len());
+                }
+                out.push(agent);
+            }
+        }
+    }
+    out
 }
 
 fn agent_kind(p: &Process) -> Option<AgentKind> {
@@ -232,5 +269,45 @@ mod tests {
         assert!(agent.memory > 0);
         assert_eq!(agent.processes[0].pid, agent.pid);
         assert_eq!(agent.processes[0].depth, 0);
+    }
+}
+
+#[cfg(test)]
+mod merge_tests {
+    use super::*;
+
+    fn agent(pid: u32, ppid: u32, kind: AgentKind, memory: u64) -> Agent {
+        Agent {
+            pid,
+            kind,
+            cwd: None,
+            cpu: 1.0,
+            memory,
+            uptime_secs: 0,
+            processes: vec![ProcNode {
+                pid,
+                ppid: Some(ppid),
+                name: "x".into(),
+                command: String::new(),
+                cpu: 1.0,
+                memory,
+                depth: 0,
+            }],
+        }
+    }
+
+    #[test]
+    fn merges_codex_siblings_but_not_claude() {
+        let merged = merge_codex_siblings(vec![
+            agent(10, 1, AgentKind::Codex, 50),
+            agent(11, 1, AgentKind::Codex, 2000),
+            agent(20, 2, AgentKind::Claude, 100),
+            agent(21, 2, AgentKind::Claude, 100),
+        ]);
+        assert_eq!(merged.len(), 3);
+        let codex = merged.iter().find(|a| a.kind == AgentKind::Codex).unwrap();
+        assert_eq!(codex.pid, 11);
+        assert_eq!(codex.memory, 2050);
+        assert_eq!(codex.processes.len(), 2);
     }
 }
