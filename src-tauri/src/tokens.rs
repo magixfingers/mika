@@ -314,7 +314,11 @@ impl TokenScanner {
         let newest = self.codex_limit.as_ref().is_none_or(|(seen, _)| ts >= *seen);
         if primary.is_object() && newest {
             let limit = RateLimit {
-                plan: limits["plan_type"].as_str().map(String::from),
+                // Some events omit the plan; keep the last one seen.
+                plan: limits["plan_type"]
+                    .as_str()
+                    .map(String::from)
+                    .or_else(|| self.codex_limit.as_ref().and_then(|(_, l)| l.plan.clone())),
                 used_percent: primary["used_percent"].as_f64().unwrap_or(0.0),
                 window_minutes: primary["window_minutes"].as_u64().unwrap_or(0),
                 resets_at_ms: primary["resets_at"].as_i64().map(|s| s * 1000).unwrap_or(ts),
