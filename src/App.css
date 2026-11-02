@@ -351,7 +351,8 @@ h2,
 .share {
   height: 3px;
   border-radius: 9999px;
-  background: var(--hairline-soft);
+  /* Pale blue track, matching the empty end of the heatmap scale. */
+  background: rgba(0, 112, 243, 0.12);
   overflow: hidden;
 }
 
@@ -368,7 +369,7 @@ h2,
 
 .meter span,
 .share::after {
-  background: var(--ink);
+  background: var(--link);
 }
 
 .share {
