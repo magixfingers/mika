@@ -162,6 +162,24 @@ html.liquid .glass {
   gap: 10px;
 }
 
+/* An agent is waiting for input: the status line turns red and pulses. */
+.app-title[data-alert] .status-line {
+  color: var(--error);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .app-title[data-alert] .status-line {
+    animation: alert-pulse 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes alert-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
 /* heading-md */
 h1 {
   font-size: 1.43rem;

@@ -23,6 +23,21 @@ function mostUrgent(statuses: SessionStatus[]): SessionStatus | null {
   );
 }
 
+// An agent averaging this much CPU over its last few samples counts as working,
+// for agents without hooks (Codex, or Claude sessions started before hooks).
+const BUSY_CPU = 5;
+const BUSY_SAMPLES = 3;
+
+function isBusy(history: number[] | undefined): boolean {
+  const recent = (history ?? []).slice(-BUSY_SAMPLES);
+  return recent.length > 0 && recent.reduce((a, b) => a + b, 0) / recent.length >= BUSY_CPU;
+}
+
+/** A working status inferred from activity; `tool` carries what was busy. */
+function inferredWorking(id: string, cwd: string | null, what: string): SessionStatus {
+  return { session_id: id, cwd, state: "working", tool: what, since_ms: 0 };
+}
+
 function describe(status: SessionStatus): string {
   return status.state === "working" && status.tool
     ? `${STATE_LABELS.working} · ${status.tool}`
@@ -166,9 +181,31 @@ function App() {
 
   const agents = snapshot?.agents ?? [];
   // Hooks report a session's folder, so an agent shows the most urgent session in its folder.
-  const statusFor = (agent: Agent) =>
-    agent.kind === "claude" ? mostUrgent(statuses.filter((s) => s.cwd === agent.cwd)) : null;
-  const overall = mostUrgent(statuses);
+  // Hook states win when they report activity; otherwise CPU use marks the agent as working.
+  const statusFor = (agent: Agent): SessionStatus | null => {
+    const hook = agent.kind === "claude" ? mostUrgent(statuses.filter((s) => s.cwd === agent.cwd)) : null;
+    if (hook && hook.state !== "idle" && hook.state !== "done") return hook;
+    if (isBusy(history[agent.pid])) return inferredWorking(`pid:${agent.pid}`, agent.cwd, AGENT_LABELS[agent.kind]);
+    return hook;
+  };
+  const tokensFlowing = (tokens?.tokens_per_sec ?? 0) > 0;
+  const overall = mostUrgent([
+    ...statuses,
+    ...agents.flatMap((a) => statusFor(a) ?? []),
+    ...(tokensFlowing ? [inferredWorking("tokens", null, "tokens flowing")] : []),
+  ]);
+  const alerting = overall?.state === "waiting";
+
+  // Notify once each time a session starts waiting for the user.
+  const waitingIds = useRef(new Set<string>());
+  useEffect(() => {
+    const waiting = statuses.filter((s) => s.state === "waiting");
+    for (const s of waiting) {
+      if (waitingIds.current.has(s.session_id)) continue;
+      invoke("alert", { title: "Mika · an agent needs you", body: `Claude Code in ${shortPath(s.cwd)} is waiting for your input.` });
+    }
+    waitingIds.current = new Set(waiting.map((s) => s.session_id));
+  }, [statuses]);
   const usage = useMemo(() => usageIn(tokens?.days ?? [], range), [tokens, range]);
 
   // On first load, grow the window so the whole overview shows without scrolling.
@@ -192,11 +229,17 @@ function App() {
       <canvas className="liquid-canvas" ref={canvasRef} aria-hidden />
       <main className="app" ref={mainRef}>
         <header className="app-header" data-tauri-drag-region>
-          <div className="app-title" data-tauri-drag-region>
+          <div className="app-title" data-tauri-drag-region data-alert={alerting || undefined}>
             <Mika state={overall?.state ?? "idle"} size={40} />
             <div>
               <h1>Mika</h1>
-              <p className="muted small">{overall ? describe(overall) : "Watching for agents"}</p>
+              <p className="muted small status-line" role={alerting ? "alert" : undefined}>
+                {overall
+                  ? alerting
+                    ? `Needs you · ${shortPath(overall.cwd)}`
+                    : describe(overall)
+                  : "Watching for agents"}
+              </p>
             </div>
           </div>
           <RangePicker value={range} onChange={setRange} />

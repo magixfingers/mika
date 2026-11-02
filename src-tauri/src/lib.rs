@@ -46,6 +46,21 @@ fn claude_limits(latest: State<'_, LatestClaudeLimits>) -> Option<ClaudeLimits> 
 #[derive(Default)]
 struct LatestTokens(Mutex<Option<TokenStats>>);
 
+/// Shows a macOS notification with a sound. osascript needs no extra plugin or
+/// entitlement; strings are escaped for AppleScript's double-quoted literals.
+#[tauri::command]
+fn alert(title: String, body: String) {
+    let quote = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+    let script = format!(
+        "display notification \"{}\" with title \"{}\" sound name \"Glass\"",
+        quote(&body),
+        quote(&title)
+    );
+    if let Err(err) = std::process::Command::new("osascript").args(["-e", &script]).spawn() {
+        eprintln!("mika: could not show alert: {err}");
+    }
+}
+
 /// Lets the WebView report to the terminal, where webview console output doesn't reach.
 #[tauri::command]
 fn log_frontend(message: String) {
@@ -203,7 +218,7 @@ pub fn run() {
         .manage(Statuses::default())
         .manage(LatestTokens::default())
         .manage(LatestClaudeLimits::default())
-        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens, claude_limits, log_frontend])
+        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens, claude_limits, alert, log_frontend])
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "Show Mika", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Mika", true, None::<&str>)?;
