@@ -34,6 +34,12 @@ fn latest_snapshot(latest: State<'_, Latest>) -> Option<Snapshot> {
 #[derive(Default)]
 struct LatestTokens(Mutex<Option<TokenStats>>);
 
+/// Lets the WebView report to the terminal, where webview console output doesn't reach.
+#[tauri::command]
+fn log_frontend(message: String) {
+    eprintln!("mika ui: {message}");
+}
+
 #[tauri::command]
 fn latest_tokens(latest: State<'_, LatestTokens>) -> Option<TokenStats> {
     latest.0.lock().ok().and_then(|s| s.clone())
@@ -160,7 +166,7 @@ pub fn run() {
         .manage(Latest::default())
         .manage(Statuses::default())
         .manage(LatestTokens::default())
-        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens])
+        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens, log_frontend])
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "Show Mika", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Mika", true, None::<&str>)?;

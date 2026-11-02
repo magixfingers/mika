@@ -120,7 +120,7 @@ export function Sessions({
   statuses: SessionStatus[];
 }) {
   return (
-    <section className="glass panel">
+    <section className="glass panel sessions">
       <h2>Sessions</h2>
       <ul className="list">
         {sessions.map((s) => {

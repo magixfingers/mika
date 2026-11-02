@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { Agent, AgentState, SessionStatus, Snapshot, TokenStats } from "./types";
 import { Mika, STATE_LABELS } from "./Mika";
 import { Activity, Limits, Models, ProviderMark, RangePicker, Sessions, Totals, usageIn, type Range } from "./Usage";
 import { compact, formatBytes, formatUptime, shortPath } from "./format";
+import { startLiquidGlass } from "./liquid";
 import "./App.css";
 
 // 10 minutes of history at the 2-second sample interval.
@@ -99,39 +100,38 @@ function AgentRow({ agent, history, status }: { agent: Agent; history: number[];
   );
 }
 
-/**
- * Scales `ref`'s content down so all of it fits the window without scrolling.
- * The content is widened by the same factor, so it scales as a whole.
- */
-function useFitToWindow() {
-  const ref = useRef<HTMLElement>(null);
-  const [scale, setScale] = useState(1);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const fit = () => {
-      // offsetHeight is the unscaled layout height; transforms don't change it.
-      const next = Math.min(1, window.innerHeight / el.offsetHeight);
-      setScale((prev) => (Math.abs(prev - next) > 0.005 ? next : prev));
-    };
-    const observer = new ResizeObserver(fit);
-    observer.observe(el);
-    window.addEventListener("resize", fit);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", fit);
-    };
-  }, []);
-  return { ref, scale };
-}
+type Page = "overview" | "agents";
 
 function App() {
-  const { ref: fitRef, scale } = useFitToWindow();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const [page, setPage] = useState<Page>("overview");
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [history, setHistory] = useState<Record<number, number[]>>({});
   const [statuses, setStatuses] = useState<SessionStatus[]>([]);
   const [tokens, setTokens] = useState<TokenStats | null>(null);
   const [range, setRange] = useState<Range>("day");
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const main = mainRef.current;
+    if (!canvas || !main) return;
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    startLiquidGlass(canvas, main)
+      .then((s) => {
+        // Unmounted while WebGPU was starting.
+        if (cancelled) return s?.();
+        stop = s;
+        document.documentElement.classList.toggle("liquid", s !== null);
+        invoke("log_frontend", { message: s ? "liquid glass running on WebGPU" : "WebGPU unavailable, using CSS glass" });
+      })
+      .catch((err) => invoke("log_frontend", { message: `liquid glass failed: ${err}` }));
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, []);
 
   useEffect(() => {
     const apply = (next: Snapshot) => {
@@ -168,11 +168,8 @@ function App() {
   return (
     <>
       <div className="backdrop" aria-hidden />
-      <main
-        className="app"
-        ref={fitRef}
-        style={{ transform: `scale(${scale})`, width: `${100 / scale}vw` }}
-      >
+      <canvas className="liquid-canvas" ref={canvasRef} aria-hidden />
+      <main className="app" ref={mainRef}>
         <header className="app-header" data-tauri-drag-region>
           <div className="app-title" data-tauri-drag-region>
             <Mika state={overall?.state ?? "idle"} size={40} />
@@ -184,42 +181,49 @@ function App() {
           <RangePicker value={range} onChange={setRange} />
         </header>
 
-        {tokens === null ? (
-          <p className="muted loading">Reading session logs…</p>
-        ) : (
-          <>
-            <Totals usage={usage} range={range} />
-            <Limits codex={tokens.codex_limit} />
-            <Models usage={usage} />
-          </>
-        )}
-
-        <section className="glass panel">
-          <div className="row">
-            <h2>Running</h2>
-            <span className="muted small">
-              {agents.length} agent{agents.length === 1 ? "" : "s"}
-            </span>
+        <div className="pages" data-page={page}>
+          <div className="page page-overview">
+            {tokens === null ? (
+              <p className="muted loading">Reading session logs…</p>
+            ) : (
+              <>
+                <Totals usage={usage} range={range} />
+                <Limits codex={tokens.codex_limit} />
+                <Models usage={usage} />
+                <Activity days={tokens.days} />
+              </>
+            )}
           </div>
-          {snapshot !== null && agents.length === 0 && <p className="muted">No Claude Code or Codex sessions running.</p>}
-          <ul className="list">
-            {agents.map((agent) => (
-              <AgentRow key={agent.pid} agent={agent} history={history[agent.pid] ?? []} status={statusFor(agent)} />
-            ))}
-          </ul>
-        </section>
 
-        {tokens && (
-          <>
-            <Sessions sessions={tokens.sessions} statuses={statuses} />
-            <Activity days={tokens.days} />
-          </>
-        )}
+          <div className="page page-agents">
+            <section className="glass panel">
+              <div className="row">
+                <h2>Running</h2>
+                <span className="muted small">
+                  {agents.length} agent{agents.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              {snapshot !== null && agents.length === 0 && (
+                <p className="muted">No Claude Code or Codex sessions running.</p>
+              )}
+              <ul className="list">
+                {agents.map((agent) => (
+                  <AgentRow key={agent.pid} agent={agent} history={history[agent.pid] ?? []} status={statusFor(agent)} />
+                ))}
+              </ul>
+            </section>
+            {tokens && <Sessions sessions={tokens.sessions} statuses={statuses} />}
+          </div>
+        </div>
 
-        <footer className="glass footer">
+        <nav className="glass tabbar" aria-label="Pages">
+          {(["overview", "agents"] as Page[]).map((p) => (
+            <button key={p} aria-current={page === p ? "page" : undefined} onClick={() => setPage(p)}>
+              {p === "overview" ? "Overview" : `Agents${agents.length ? ` · ${agents.length}` : ""}`}
+            </button>
+          ))}
           <span className="rate">{compact(tokens?.tokens_per_sec ?? 0)} tok/s</span>
-          <span className="muted small">last minute</span>
-        </footer>
+        </nav>
       </main>
     </>
   );
