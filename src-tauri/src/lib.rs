@@ -1,5 +1,6 @@
 mod sampler;
 mod status;
+mod tokens;
 
 use std::sync::Mutex;
 use std::thread;
@@ -7,11 +8,14 @@ use std::time::Duration;
 
 use sampler::{Sampler, Snapshot};
 use status::{AgentState, SessionStatus, Tracker};
+use tokens::{TokenScanner, TokenStats};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(2);
+/// Token logs change less often than processes, and a scan touches many files.
+const TOKEN_SCAN_INTERVAL: Duration = Duration::from_secs(5);
 const TRAY_ID: &str = "mika-tray";
 
 /// The latest snapshot, so a window that opens between samples has data at once.
@@ -24,6 +28,14 @@ struct Statuses(Mutex<Tracker>);
 
 #[tauri::command]
 fn latest_snapshot(latest: State<'_, Latest>) -> Option<Snapshot> {
+    latest.0.lock().ok().and_then(|s| s.clone())
+}
+
+#[derive(Default)]
+struct LatestTokens(Mutex<Option<TokenStats>>);
+
+#[tauri::command]
+fn latest_tokens(latest: State<'_, LatestTokens>) -> Option<TokenStats> {
     latest.0.lock().ok().and_then(|s| s.clone())
 }
 
@@ -107,6 +119,26 @@ fn publish_statuses(app: &AppHandle) {
     }
 }
 
+fn spawn_token_scanner(app: AppHandle) {
+    let Ok(home) = app.path().home_dir() else {
+        eprintln!("mika: no home directory, token usage unavailable");
+        return;
+    };
+    thread::spawn(move || {
+        let mut scanner = TokenScanner::new(&home);
+        loop {
+            scanner.scan();
+            // Emitted every tick, not only on change, so tokens per second decays to zero.
+            let stats = scanner.stats();
+            let _ = app.emit("tokens", &stats);
+            if let Ok(mut latest) = app.state::<LatestTokens>().0.lock() {
+                *latest = Some(stats);
+            }
+            thread::sleep(TOKEN_SCAN_INTERVAL);
+        }
+    });
+}
+
 fn spawn_hook_listener(app: AppHandle) {
     thread::spawn(move || {
         let result = status::serve(|event| {
@@ -127,7 +159,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(Latest::default())
         .manage(Statuses::default())
-        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses])
+        .manage(LatestTokens::default())
+        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens])
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "Show Mika", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Mika", true, None::<&str>)?;
@@ -159,6 +192,7 @@ pub fn run() {
 
             spawn_sampler(app.handle().clone());
             spawn_hook_listener(app.handle().clone());
+            spawn_token_scanner(app.handle().clone());
             Ok(())
         })
         .on_window_event(|window, event| {

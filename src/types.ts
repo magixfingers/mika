@@ -38,3 +38,43 @@ export interface SessionStatus {
   tool: string | null;
   since_ms: number;
 }
+
+// Mirrors src-tauri/src/tokens.rs.
+
+export type Provider = "claude" | "codex";
+
+export interface ModelUsage {
+  tokens: number;
+  cost: number;
+}
+
+export interface DayUsage {
+  date: string;
+  models: Record<string, ModelUsage>;
+}
+
+export interface SessionUsage {
+  id: string;
+  provider: Provider;
+  title: string | null;
+  cwd: string | null;
+  models: string[];
+  tokens: number;
+  cost: number;
+  subagents: number;
+  last_active_ms: number;
+}
+
+export interface RateLimit {
+  plan: string | null;
+  used_percent: number;
+  window_minutes: number;
+  resets_at_ms: number;
+}
+
+export interface TokenStats {
+  days: DayUsage[];
+  sessions: SessionUsage[];
+  codex_limit: RateLimit | null;
+  tokens_per_sec: number;
+}

@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Agent, AgentState, SessionStatus, Snapshot } from "./types";
+import type { Agent, AgentState, SessionStatus, Snapshot, TokenStats } from "./types";
 import { Mika, STATE_LABELS } from "./Mika";
+import { Activity, Limits, Models, ProviderMark, RangePicker, Sessions, Totals, usageIn, type Range } from "./Usage";
+import { compact, formatBytes, formatUptime, shortPath } from "./format";
 import "./App.css";
 
 // 10 minutes of history at the 2-second sample interval.
@@ -29,25 +31,6 @@ const AGENT_LABELS: Record<Agent["kind"], string> = {
   codex: "Codex",
 };
 
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
-  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(0)} MB`;
-  return `${(bytes / 1024).toFixed(0)} KB`;
-}
-
-function formatUptime(secs: number): string {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m`;
-  return `${secs}s`;
-}
-
-function shortPath(path: string | null): string {
-  if (!path) return "unknown folder";
-  return path.replace(/^\/Users\/[^/]+/, "~");
-}
-
 function Sparkline({ values }: { values: number[] }) {
   if (values.length < 2) return <svg className="sparkline" />;
   const max = Math.max(100, ...values);
@@ -63,83 +46,56 @@ function Sparkline({ values }: { values: number[] }) {
   );
 }
 
-function AgentCard({
-  agent,
-  history,
-  status,
-}: {
-  agent: Agent;
-  history: number[];
-  status: SessionStatus | null;
-}) {
+function AgentRow({ agent, history, status }: { agent: Agent; history: number[]; status: SessionStatus | null }) {
   const [expanded, setExpanded] = useState(false);
-  const childCount = agent.processes.length - 1;
-
   return (
-    <section className={`agent agent-${agent.kind}`}>
-      <button className="agent-header" onClick={() => setExpanded(!expanded)}>
-        <div className="agent-title">
-          {status && <Mika state={status.state} size={28} />}
-          <div className="agent-name">
-            <span className="agent-kind">{AGENT_LABELS[agent.kind]}</span>
-            <span className="agent-cwd">
-              {status ? `${describe(status)} · ` : ""}
-              {shortPath(agent.cwd)}
-            </span>
-          </div>
+    <li className={`agent agent-${agent.kind}`}>
+      <button className="agent-header" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
+        {status ? <Mika state={status.state} size={22} /> : <ProviderMark provider={agent.kind} />}
+        <div className="session-text">
+          <span className="name">{AGENT_LABELS[agent.kind]}</span>
+          <span className="muted small">
+            {status ? `${describe(status)} · ` : ""}
+            {shortPath(agent.cwd)}
+          </span>
         </div>
         <Sparkline values={history} />
-        <dl className="agent-stats">
-          <div>
-            <dt>CPU</dt>
-            <dd>{agent.cpu.toFixed(0)}%</dd>
-          </div>
-          <div>
-            <dt>Memory</dt>
-            <dd>{formatBytes(agent.memory)}</dd>
-          </div>
-          <div>
-            <dt>Up</dt>
-            <dd>{formatUptime(agent.uptime_secs)}</dd>
-          </div>
-          <div>
-            <dt>Procs</dt>
-            <dd>{agent.processes.length}</dd>
-          </div>
-        </dl>
+        <div className="agent-stats">
+          <span>{agent.cpu.toFixed(0)}%</span>
+          <span className="muted small">{formatBytes(agent.memory)}</span>
+        </div>
       </button>
-
       {expanded && (
         <table className="proc-tree">
           <thead>
             <tr>
               <th>Process</th>
-              <th>PID</th>
               <th>CPU</th>
               <th>Memory</th>
             </tr>
           </thead>
           <tbody>
             {agent.processes.map((p) => (
-              <tr key={p.pid} title={p.command}>
-                <td style={{ paddingLeft: `${8 + p.depth * 16}px` }}>
-                  {p.depth > 0 && <span className="tree-branch">└ </span>}
+              <tr key={p.pid} title={`${p.pid} · ${p.command}`}>
+                <td style={{ paddingLeft: `${4 + p.depth * 12}px` }}>
+                  {p.depth > 0 && <span className="muted">└ </span>}
                   {p.name}
                 </td>
-                <td className="num">{p.pid}</td>
                 <td className="num">{p.cpu.toFixed(1)}%</td>
                 <td className="num">{formatBytes(p.memory)}</td>
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={3} className="muted">
+                Up {formatUptime(agent.uptime_secs)} · pid {agent.pid}
+              </td>
+            </tr>
+          </tfoot>
         </table>
       )}
-      {!expanded && childCount > 0 && (
-        <p className="agent-hint">
-          {childCount} child process{childCount === 1 ? "" : "es"} — click to show
-        </p>
-      )}
-    </section>
+    </li>
   );
 }
 
@@ -147,6 +103,8 @@ function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [history, setHistory] = useState<Record<number, number[]>>({});
   const [statuses, setStatuses] = useState<SessionStatus[]>([]);
+  const [tokens, setTokens] = useState<TokenStats | null>(null);
+  const [range, setRange] = useState<Range>("day");
 
   useEffect(() => {
     const apply = (next: Snapshot) => {
@@ -162,9 +120,11 @@ function App() {
 
     invoke<Snapshot | null>("latest_snapshot").then((s) => s && apply(s));
     invoke<SessionStatus[]>("session_statuses").then(setStatuses);
+    invoke<TokenStats | null>("latest_tokens").then((t) => t && setTokens(t));
     const unlisteners = [
       listen<Snapshot>("agents", (event) => apply(event.payload)),
       listen<SessionStatus[]>("statuses", (event) => setStatuses(event.payload)),
+      listen<TokenStats>("tokens", (event) => setTokens(event.payload)),
     ];
     return () => {
       unlisteners.forEach((u) => u.then((fn) => fn()));
@@ -172,43 +132,65 @@ function App() {
   }, []);
 
   const agents = snapshot?.agents ?? [];
-  const totalCpu = agents.reduce((sum, a) => sum + a.cpu, 0);
-  const totalMemory = agents.reduce((sum, a) => sum + a.memory, 0);
-  // Hooks report a session's folder, so a card shows the most urgent session in its folder.
+  // Hooks report a session's folder, so an agent shows the most urgent session in its folder.
   const statusFor = (agent: Agent) =>
     agent.kind === "claude" ? mostUrgent(statuses.filter((s) => s.cwd === agent.cwd)) : null;
-  const overall = mostUrgent(agents.flatMap((a) => statusFor(a) ?? []));
+  const overall = mostUrgent(statuses);
+  const usage = useMemo(() => usageIn(tokens?.days ?? [], range), [tokens, range]);
 
   return (
-    <main className="app">
-      <header className="app-header">
-        <div className="app-title">
-          <Mika state={overall?.state ?? "idle"} />
-          <div>
-            <h1>Mika</h1>
-            <p className="summary">{overall ? describe(overall) : "No status from hooks yet"}</p>
+    <>
+      <div className="backdrop" aria-hidden />
+      <main className="app">
+        <header className="app-header" data-tauri-drag-region>
+          <div className="app-title" data-tauri-drag-region>
+            <Mika state={overall?.state ?? "idle"} size={40} />
+            <div>
+              <h1>Mika</h1>
+              <p className="muted small">{overall ? describe(overall) : "Watching for agents"}</p>
+            </div>
           </div>
-        </div>
-        <p className="summary">
-          {snapshot === null
-            ? "Sampling…"
-            : `${agents.length} agent${agents.length === 1 ? "" : "s"} · ${totalCpu.toFixed(0)}% CPU · ${formatBytes(totalMemory)}`}
-        </p>
-      </header>
+          <RangePicker value={range} onChange={setRange} />
+        </header>
 
-      {snapshot !== null && agents.length === 0 && (
-        <p className="empty">No Claude Code or Codex sessions running.</p>
-      )}
+        {tokens === null ? (
+          <p className="muted loading">Reading session logs…</p>
+        ) : (
+          <>
+            <Totals usage={usage} range={range} />
+            <Limits codex={tokens.codex_limit} />
+            <Models usage={usage} />
+          </>
+        )}
 
-      {agents.map((agent) => (
-        <AgentCard
-          key={agent.pid}
-          agent={agent}
-          history={history[agent.pid] ?? []}
-          status={statusFor(agent)}
-        />
-      ))}
-    </main>
+        <section className="glass panel">
+          <div className="row">
+            <h2>Running</h2>
+            <span className="muted small">
+              {agents.length} agent{agents.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          {snapshot !== null && agents.length === 0 && <p className="muted">No Claude Code or Codex sessions running.</p>}
+          <ul className="list">
+            {agents.map((agent) => (
+              <AgentRow key={agent.pid} agent={agent} history={history[agent.pid] ?? []} status={statusFor(agent)} />
+            ))}
+          </ul>
+        </section>
+
+        {tokens && (
+          <>
+            <Sessions sessions={tokens.sessions} statuses={statuses} />
+            <Activity days={tokens.days} />
+          </>
+        )}
+
+        <footer className="glass footer">
+          <span className="rate">{compact(tokens?.tokens_per_sec ?? 0)} tok/s</span>
+          <span className="muted small">last minute</span>
+        </footer>
+      </main>
+    </>
   );
 }
 
