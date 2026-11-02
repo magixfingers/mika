@@ -16,6 +16,8 @@ use serde_json::Value;
 const RATE_WINDOW_MS: i64 = 60_000;
 const MAX_SESSIONS: usize = 8;
 const MAX_WALK_DEPTH: usize = 6;
+/// Codex's automatic review runs: counted per model and day, but not as session work.
+const REVIEW_MODEL: &str = "codex-auto-review";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -66,6 +68,7 @@ pub struct SessionUsage {
     pub title: Option<String>,
     pub cwd: Option<String>,
     pub models: Vec<String>,
+    pub effort: Option<String>,
     pub tokens: u64,
     pub cost: f64,
     pub subagents: usize,
@@ -118,6 +121,7 @@ struct Session {
     title: Option<String>,
     cwd: Option<String>,
     models: BTreeMap<String, Usage>,
+    effort: Option<String>,
     subagents: HashSet<String>,
     last_active_ms: i64,
 }
@@ -127,6 +131,7 @@ struct Session {
 struct FileState {
     offset: u64,
     codex_model: Option<String>,
+    codex_effort: Option<String>,
     codex_session: Option<String>,
     codex_last_total: u64,
 }
@@ -265,6 +270,9 @@ impl TokenScanner {
         if session.cwd.is_none() {
             session.cwd = v["cwd"].as_str().map(String::from);
         }
+        if let Some(effort) = v["effort"].as_str() {
+            session.effort = Some(effort.to_string());
+        }
         if path.components().any(|c| c.as_os_str() == "subagents") {
             session.subagents.insert(path.display().to_string());
         }
@@ -296,9 +304,11 @@ impl TokenScanner {
                 self.files.entry(path.to_path_buf()).or_default().codex_session = Some(key);
             }
             (Some("turn_context"), _) => {
+                let state = self.files.entry(path.to_path_buf()).or_default();
                 if let Some(model) = p["model"].as_str() {
-                    self.files.entry(path.to_path_buf()).or_default().codex_model = Some(model.to_string());
+                    state.codex_model = Some(model.to_string());
                 }
+                state.codex_effort = p["effort"].as_str().map(String::from);
             }
             (Some("event_msg"), Some("token_count")) => self.codex_token_count(path, &v),
             _ => {}
@@ -336,6 +346,7 @@ impl TokenScanner {
         state.codex_last_total = total;
         let Some(key) = state.codex_session.clone() else { return };
         let model = state.codex_model.clone().unwrap_or_else(|| "codex".into());
+        let effort = state.codex_effort.clone();
 
         let last = &info["last_token_usage"];
         let input = last["input_tokens"].as_u64().unwrap_or(0);
@@ -347,6 +358,11 @@ impl TokenScanner {
             cache_read: cached,
             cache_write: 0,
         };
+        if model != REVIEW_MODEL
+            && let Some(effort) = effort
+        {
+            self.session(&key, Provider::Codex).effort = Some(effort);
+        }
         self.record(&key, &model, usage, ts);
     }
 
@@ -357,9 +373,11 @@ impl TokenScanner {
     }
 
     fn record(&mut self, key: &str, model: &str, usage: Usage, ts_ms: i64) {
-        let session = self.sessions.entry(key.to_string()).or_default();
-        session.models.entry(model.to_string()).or_default().add(&usage);
-        session.last_active_ms = session.last_active_ms.max(ts_ms);
+        if model != REVIEW_MODEL {
+            let session = self.sessions.entry(key.to_string()).or_default();
+            session.models.entry(model.to_string()).or_default().add(&usage);
+            session.last_active_ms = session.last_active_ms.max(ts_ms);
+        }
 
         if let Some(date) = DateTime::from_timestamp_millis(ts_ms) {
             let day = date.with_timezone(&Local).format("%Y-%m-%d").to_string();
@@ -390,8 +408,7 @@ impl TokenScanner {
         let mut sessions: Vec<SessionUsage> = self
             .sessions
             .iter()
-            // Codex's automatic review threads are untitled noise in a session list.
-            .filter(|(_, s)| s.models.keys().any(|m| m != "codex-auto-review"))
+            .filter(|(_, s)| s.models.values().any(|u| u.total() > 0))
             .map(|(key, s)| {
                 let id = key.split_once(':').map(|(_, id)| id).unwrap_or(key);
                 SessionUsage {
@@ -400,6 +417,7 @@ impl TokenScanner {
                     title: s.title.clone().or_else(|| self.codex_titles.get(id).cloned()),
                     cwd: s.cwd.clone(),
                     models: s.models.keys().cloned().collect(),
+                    effort: s.effort.clone(),
                     tokens: s.models.values().map(Usage::total).sum(),
                     cost: s.models.iter().map(|(m, u)| cost(m, u)).sum(),
                     subagents: s.subagents.len(),

@@ -59,6 +59,7 @@ export interface SessionUsage {
   title: string | null;
   cwd: string | null;
   models: string[];
+  effort: string | null;
   tokens: number;
   cost: number;
   subagents: number;

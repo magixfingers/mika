@@ -125,7 +125,7 @@ export function Sessions({
         {sessions.map((s) => {
           const live = s.provider === "claude" ? statuses.find((st) => st.session_id === s.id) : undefined;
           const model = s.models.length === 1 ? s.models[0] : `${s.models.length} models`;
-          const meta = [model, s.subagents > 0 && `${s.subagents} subagent${s.subagents === 1 ? "" : "s"}`, timeAgo(s.last_active_ms)]
+          const meta = [model, s.effort, s.subagents > 0 && `${s.subagents} subagent${s.subagents === 1 ? "" : "s"}`, timeAgo(s.last_active_ms)]
             .filter(Boolean)
             .join(" · ");
           return (
@@ -242,6 +242,35 @@ export function Activity({ days }: { days: DayUsage[] }) {
   );
 }
 
+// Twelve tapered rays, evoking Claude's starburst.
+const CLAUDE_RAYS = Array.from({ length: 12 }, (_, i) => i * 30);
+// Six interlocking loops, evoking OpenAI's knot.
+const OPENAI_LOOPS = Array.from({ length: 6 }, (_, i) => i * 60);
+
 export function ProviderMark({ provider }: { provider: Provider }) {
-  return <span className={`mark mark-${provider}`} aria-label={provider === "claude" ? "Claude" : "Codex"} />;
+  const label = provider === "claude" ? "Claude" : "Codex";
+  return (
+    <svg className={`mark mark-${provider}`} viewBox="-12 -12 24 24" role="img" aria-label={label}>
+      {provider === "claude"
+        ? CLAUDE_RAYS.map((deg, i) => (
+            <path
+              key={deg}
+              transform={`rotate(${deg})`}
+              d={i % 2 ? "M-0.9 -2 L0 -9 L0.9 -2 Z" : "M-1.1 -1.5 L0 -11 L1.1 -1.5 Z"}
+            />
+          ))
+        : OPENAI_LOOPS.map((deg) => (
+            <rect
+              key={deg}
+              transform={`rotate(${deg}) translate(0 -4.2)`}
+              x="-2.6"
+              y="-5.2"
+              width="5.2"
+              height="10.4"
+              rx="2.6"
+              className="loop"
+            />
+          ))}
+    </svg>
+  );
 }

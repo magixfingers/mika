@@ -344,19 +344,19 @@ p {
 
 .mark {
   flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  width: 1.05em;
+  height: 1.05em;
+  overflow: visible;
 }
 
-.mark-claude {
-  background: var(--claude);
-  box-shadow: 0 0 8px var(--claude);
+.mark-claude path {
+  fill: currentColor;
 }
 
-.mark-codex {
-  background: var(--codex);
-  box-shadow: 0 0 8px var(--codex);
+.mark-codex .loop {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
 }
 
 .plan {
