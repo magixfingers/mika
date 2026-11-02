@@ -1,10 +1,12 @@
 mod sampler;
+mod status;
 
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
 use sampler::{Sampler, Snapshot};
+use status::{AgentState, SessionStatus, Tracker};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -16,19 +18,39 @@ const TRAY_ID: &str = "mika-tray";
 #[derive(Default)]
 struct Latest(Mutex<Option<Snapshot>>);
 
+/// Hook-reported session states, shared by the listener and the sampler loop.
+#[derive(Default)]
+struct Statuses(Mutex<Tracker>);
+
 #[tauri::command]
 fn latest_snapshot(latest: State<'_, Latest>) -> Option<Snapshot> {
     latest.0.lock().ok().and_then(|s| s.clone())
 }
 
-fn tray_title(snapshot: &Snapshot) -> String {
+#[tauri::command]
+fn session_statuses(statuses: State<'_, Statuses>) -> Vec<SessionStatus> {
+    statuses.0.lock().map(|mut t| t.snapshot(status::now_ms())).unwrap_or_default()
+}
+
+fn state_glyph(state: AgentState) -> &'static str {
+    match state {
+        AgentState::Idle => "○",
+        AgentState::Done => "✓",
+        AgentState::Thinking => "◌",
+        AgentState::Working => "●",
+        AgentState::Waiting => "◆",
+    }
+}
+
+fn tray_title(snapshot: &Snapshot, state: Option<AgentState>) -> String {
     if snapshot.agents.is_empty() {
         return "Mika".into();
     }
+    let glyph = state.map(|s| format!("{} ", state_glyph(s))).unwrap_or_default();
     let cpu: f32 = snapshot.agents.iter().map(|a| a.cpu).sum();
     let mem: u64 = snapshot.agents.iter().map(|a| a.memory).sum();
     format!(
-        "{} agent{} · {:.0}% · {:.1} GB",
+        "{glyph}{} agent{} · {:.0}% · {:.1} GB",
         snapshot.agents.len(),
         if snapshot.agents.len() == 1 { "" } else { "s" },
         cpu,
@@ -58,14 +80,43 @@ fn spawn_sampler(app: AppHandle) {
         };
         loop {
             let snapshot = sampler.sample();
-            if let Some(tray) = app.tray_by_id(TRAY_ID) {
-                let _ = tray.set_title(Some(tray_title(&snapshot)));
-            }
             let _ = app.emit("agents", &snapshot);
             if let Ok(mut latest) = app.state::<Latest>().0.lock() {
                 *latest = Some(snapshot);
             }
+            // Re-publishing statuses each tick lets done sessions settle to idle.
+            publish_statuses(&app);
             thread::sleep(SAMPLE_INTERVAL);
+        }
+    });
+}
+
+/// Emits the current session statuses and refreshes the tray title.
+fn publish_statuses(app: &AppHandle) {
+    let sessions = match app.state::<Statuses>().0.lock() {
+        Ok(mut tracker) => tracker.snapshot(status::now_ms()),
+        Err(_) => return,
+    };
+    let _ = app.emit("statuses", &sessions);
+    let title = match app.state::<Latest>().0.lock() {
+        Ok(latest) => latest.as_ref().map(|s| tray_title(s, status::overall(&sessions))),
+        Err(_) => None,
+    };
+    if let (Some(title), Some(tray)) = (title, app.tray_by_id(TRAY_ID)) {
+        let _ = tray.set_title(Some(title));
+    }
+}
+
+fn spawn_hook_listener(app: AppHandle) {
+    thread::spawn(move || {
+        let result = status::serve(|event| {
+            if let Ok(mut tracker) = app.state::<Statuses>().0.lock() {
+                tracker.apply(event, status::now_ms());
+            }
+            publish_statuses(&app);
+        });
+        if let Err(err) = result {
+            eprintln!("mika: hook listener on {} unavailable: {err}", status::HOOK_ADDR);
         }
     });
 }
@@ -75,7 +126,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(Latest::default())
-        .invoke_handler(tauri::generate_handler![latest_snapshot])
+        .manage(Statuses::default())
+        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses])
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "Show Mika", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Mika", true, None::<&str>)?;
@@ -106,6 +158,7 @@ pub fn run() {
                 .build(app)?;
 
             spawn_sampler(app.handle().clone());
+            spawn_hook_listener(app.handle().clone());
             Ok(())
         })
         .on_window_event(|window, event| {

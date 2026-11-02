@@ -6,6 +6,7 @@
   --border: #e4e4e9;
   --claude: #d97757;
   --codex: #10a37f;
+  --alert: #e5484d;
 
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif;
   font-size: 14px;
@@ -43,7 +44,7 @@ body {
 
 .app-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
 }
 
@@ -95,7 +96,20 @@ body {
   cursor: pointer;
 }
 
+.app-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .agent-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.agent-name {
   display: flex;
   flex-direction: column;
   min-width: 0;

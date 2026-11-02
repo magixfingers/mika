@@ -43,3 +43,20 @@ Prerequisites: [Rust](https://www.rust-lang.org/tools/install), Node 20+, Xcode 
 npm install
 npm run tauri dev
 ```
+
+## Agent status hooks
+
+Mika learns what each Claude Code session is doing from [hooks](https://docs.claude.com/en/docs/claude-code/hooks). Each hook posts its JSON input to Mika's listener on `127.0.0.1:47321`, which never leaves your machine. When Mika isn't running, the hook times out after 1 second and does nothing.
+
+To enable it, merge the `hooks` block from [`hooks/claude-code-settings.json`](hooks/claude-code-settings.json) into `~/.claude/settings.json`. Sessions started after that report their status.
+
+| Hook event | State |
+| --- | --- |
+| `SessionStart` | Idle |
+| `UserPromptSubmit`, `PostToolUse` | Thinking |
+| `PreToolUse` | Working (shows the tool name) |
+| `Notification` | Needs you |
+| `Stop` | Done, then idle after 30 seconds |
+| `SessionEnd` | Removed |
+
+A card shows the most urgent session whose folder matches the agent's folder. Codex has no hooks yet, so Codex cards show resources only.

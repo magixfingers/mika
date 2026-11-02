@@ -26,3 +26,15 @@ export interface Snapshot {
   sampled_at_ms: number;
   agents: Agent[];
 }
+
+// Mirrors src-tauri/src/status.rs.
+
+export type AgentState = "idle" | "done" | "thinking" | "working" | "waiting";
+
+export interface SessionStatus {
+  session_id: string;
+  cwd: string | null;
+  state: AgentState;
+  tool: string | null;
+  since_ms: number;
+}

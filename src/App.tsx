@@ -1,11 +1,28 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Agent, Snapshot } from "./types";
+import type { Agent, AgentState, SessionStatus, Snapshot } from "./types";
+import { Mika, STATE_LABELS } from "./Mika";
 import "./App.css";
 
 // 10 minutes of history at the 2-second sample interval.
 const HISTORY_LENGTH = 300;
+
+// Most urgent last, matching AgentState's order in status.rs.
+const URGENCY: AgentState[] = ["idle", "done", "thinking", "working", "waiting"];
+
+function mostUrgent(statuses: SessionStatus[]): SessionStatus | null {
+  return statuses.reduce<SessionStatus | null>(
+    (top, s) => (top === null || URGENCY.indexOf(s.state) > URGENCY.indexOf(top.state) ? s : top),
+    null,
+  );
+}
+
+function describe(status: SessionStatus): string {
+  return status.state === "working" && status.tool
+    ? `${STATE_LABELS.working} · ${status.tool}`
+    : STATE_LABELS[status.state];
+}
 
 const AGENT_LABELS: Record<Agent["kind"], string> = {
   claude: "Claude Code",
@@ -46,7 +63,15 @@ function Sparkline({ values }: { values: number[] }) {
   );
 }
 
-function AgentCard({ agent, history }: { agent: Agent; history: number[] }) {
+function AgentCard({
+  agent,
+  history,
+  status,
+}: {
+  agent: Agent;
+  history: number[];
+  status: SessionStatus | null;
+}) {
   const [expanded, setExpanded] = useState(false);
   const childCount = agent.processes.length - 1;
 
@@ -54,8 +79,14 @@ function AgentCard({ agent, history }: { agent: Agent; history: number[] }) {
     <section className={`agent agent-${agent.kind}`}>
       <button className="agent-header" onClick={() => setExpanded(!expanded)}>
         <div className="agent-title">
-          <span className="agent-kind">{AGENT_LABELS[agent.kind]}</span>
-          <span className="agent-cwd">{shortPath(agent.cwd)}</span>
+          {status && <Mika state={status.state} size={28} />}
+          <div className="agent-name">
+            <span className="agent-kind">{AGENT_LABELS[agent.kind]}</span>
+            <span className="agent-cwd">
+              {status ? `${describe(status)} · ` : ""}
+              {shortPath(agent.cwd)}
+            </span>
+          </div>
         </div>
         <Sparkline values={history} />
         <dl className="agent-stats">
@@ -115,6 +146,7 @@ function AgentCard({ agent, history }: { agent: Agent; history: number[] }) {
 function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [history, setHistory] = useState<Record<number, number[]>>({});
+  const [statuses, setStatuses] = useState<SessionStatus[]>([]);
 
   useEffect(() => {
     const apply = (next: Snapshot) => {
@@ -129,20 +161,34 @@ function App() {
     };
 
     invoke<Snapshot | null>("latest_snapshot").then((s) => s && apply(s));
-    const unlisten = listen<Snapshot>("agents", (event) => apply(event.payload));
+    invoke<SessionStatus[]>("session_statuses").then(setStatuses);
+    const unlisteners = [
+      listen<Snapshot>("agents", (event) => apply(event.payload)),
+      listen<SessionStatus[]>("statuses", (event) => setStatuses(event.payload)),
+    ];
     return () => {
-      unlisten.then((fn) => fn());
+      unlisteners.forEach((u) => u.then((fn) => fn()));
     };
   }, []);
 
   const agents = snapshot?.agents ?? [];
   const totalCpu = agents.reduce((sum, a) => sum + a.cpu, 0);
   const totalMemory = agents.reduce((sum, a) => sum + a.memory, 0);
+  // Hooks report a session's folder, so a card shows the most urgent session in its folder.
+  const statusFor = (agent: Agent) =>
+    agent.kind === "claude" ? mostUrgent(statuses.filter((s) => s.cwd === agent.cwd)) : null;
+  const overall = mostUrgent(agents.flatMap((a) => statusFor(a) ?? []));
 
   return (
     <main className="app">
       <header className="app-header">
-        <h1>Mika</h1>
+        <div className="app-title">
+          <Mika state={overall?.state ?? "idle"} />
+          <div>
+            <h1>Mika</h1>
+            <p className="summary">{overall ? describe(overall) : "No status from hooks yet"}</p>
+          </div>
+        </div>
         <p className="summary">
           {snapshot === null
             ? "Sampling…"
@@ -155,7 +201,12 @@ function App() {
       )}
 
       {agents.map((agent) => (
-        <AgentCard key={agent.pid} agent={agent} history={history[agent.pid] ?? []} />
+        <AgentCard
+          key={agent.pid}
+          agent={agent}
+          history={history[agent.pid] ?? []}
+          status={statusFor(agent)}
+        />
       ))}
     </main>
   );
