@@ -367,8 +367,11 @@ h2,
 }
 
 .meter span,
+.share::after {
+  background: var(--ink);
+}
+
 .share {
-  height: 3px;
   margin-top: 6px;
 }
 
