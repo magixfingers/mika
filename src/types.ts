@@ -46,6 +46,7 @@ export type AgentState = "idle" | "done" | "thinking" | "working" | "waiting";
 
 export interface SessionStatus {
   session_id: string;
+  agent: "claude" | "codex";
   cwd: string | null;
   state: AgentState;
   tool: string | null;

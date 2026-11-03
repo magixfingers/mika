@@ -37,8 +37,8 @@ function isBusy(history: number[] | undefined): boolean {
 }
 
 /** A working status inferred from activity; `tool` carries what was busy. */
-function inferredWorking(id: string, cwd: string | null, what: string): SessionStatus {
-  return { session_id: id, cwd, state: "working", tool: what, since_ms: 0 };
+function inferredWorking(id: string, agent: Agent["kind"], cwd: string | null, what: string): SessionStatus {
+  return { session_id: id, agent, cwd, state: "working", tool: what, since_ms: 0 };
 }
 
 function describe(status: SessionStatus): string {
@@ -229,16 +229,20 @@ function App() {
   // Hooks report a session's folder, so an agent shows the most urgent session in its folder.
   // Hook states win when they report activity; otherwise CPU use marks the agent as working.
   const statusFor = (agent: Agent): SessionStatus | null => {
-    const hook = agent.kind === "claude" ? mostUrgent(statuses.filter((s) => s.cwd === agent.cwd)) : null;
+    // Claude runs one process per session, matched by folder; the ChatGPT app's single
+    // Codex agent hosts every Codex thread, so it shows the most urgent of them.
+    const hook = mostUrgent(
+      statuses.filter((s) => s.agent === agent.kind && (agent.kind === "codex" || s.cwd === agent.cwd)),
+    );
     if (hook && hook.state !== "idle" && hook.state !== "done") return hook;
-    if (isBusy(history[agent.pid])) return inferredWorking(`pid:${agent.pid}`, agent.cwd, AGENT_LABELS[agent.kind]);
+    if (isBusy(history[agent.pid])) return inferredWorking(`pid:${agent.pid}`, agent.kind, agent.cwd, AGENT_LABELS[agent.kind]);
     return hook;
   };
   const tokensFlowing = (tokens?.tokens_per_sec ?? 0) > 0;
   const overall = mostUrgent([
     ...statuses,
     ...agents.flatMap((a) => statusFor(a) ?? []),
-    ...(tokensFlowing ? [inferredWorking("tokens", null, "tokens flowing")] : []),
+    ...(tokensFlowing ? [inferredWorking("tokens", "claude", null, "tokens flowing")] : []),
   ]);
   const alerting = overall?.state === "waiting";
 
@@ -255,7 +259,7 @@ function App() {
     const waiting = statuses.filter((s) => s.state === "waiting");
     for (const s of waiting) {
       if (waitingIds.current.has(s.session_id)) continue;
-      invoke("alert", { title: "Mika · an agent needs you", body: `Claude Code in ${shortPath(s.cwd)} is waiting for your input.` });
+      invoke("alert", { title: "Mika · an agent needs you", body: `${AGENT_LABELS[s.agent]} in ${shortPath(s.cwd)} is waiting for your input.` });
     }
     waitingIds.current = new Set(waiting.map((s) => s.session_id));
   }, [statuses]);
@@ -267,7 +271,7 @@ function App() {
     if (settings?.alert_on_done) {
       for (const s of done) {
         if (doneIds.current.has(s.session_id)) continue;
-        invoke("alert", { title: "Mika · an agent finished", body: `Claude Code in ${shortPath(s.cwd)} is done.` });
+        invoke("alert", { title: "Mika · an agent finished", body: `${AGENT_LABELS[s.agent]} in ${shortPath(s.cwd)} is done.` });
       }
     }
     doneIds.current = new Set(done.map((s) => s.session_id));

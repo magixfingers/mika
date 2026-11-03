@@ -116,10 +116,31 @@ pub fn save(path: &Path, settings: &Settings) -> Result<(), String> {
 // --- Claude Code hooks -------------------------------------------------------
 
 const HOOK_MARKER: &str = "127.0.0.1:47321";
-const HOOKS: &str = include_str!("../../hooks/claude-code-settings.json");
 
-pub fn claude_settings_path(home: &Path) -> PathBuf {
-    home.join(".claude/settings.json")
+/// An agent whose hooks file Mika can add itself to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Integration {
+    Claude,
+    Codex,
+}
+
+impl Integration {
+    /// The file the agent reads hooks from.
+    pub fn hooks_path(self, home: &Path) -> PathBuf {
+        match self {
+            Integration::Claude => home.join(".claude/settings.json"),
+            Integration::Codex => home.join(".codex/hooks.json"),
+        }
+    }
+
+    /// Mika's hook entries, in the agent's own format.
+    fn template(self) -> &'static str {
+        match self {
+            Integration::Claude => include_str!("../../hooks/claude-code-settings.json"),
+            Integration::Codex => include_str!("../../hooks/codex-hooks.json"),
+        }
+    }
 }
 
 fn is_mika_group(group: &Value) -> bool {
@@ -127,8 +148,8 @@ fn is_mika_group(group: &Value) -> bool {
 }
 
 /// Whether every hook event Mika needs has a Mika entry.
-pub fn hooks_installed(settings: &Value) -> bool {
-    let ours: Value = serde_json::from_str(HOOKS).unwrap_or_default();
+pub fn hooks_installed(integration: Integration, settings: &Value) -> bool {
+    let ours: Value = serde_json::from_str(integration.template()).unwrap_or_default();
     let Some(events) = ours["hooks"].as_object() else { return false };
     events.keys().all(|event| {
         settings["hooks"][event]
@@ -138,8 +159,8 @@ pub fn hooks_installed(settings: &Value) -> bool {
 }
 
 /// Adds Mika's hooks next to any existing ones, without duplicating.
-pub fn with_hooks(mut settings: Value) -> Value {
-    let ours: Value = serde_json::from_str(HOOKS).unwrap_or_default();
+pub fn with_hooks(integration: Integration, mut settings: Value) -> Value {
+    let ours: Value = serde_json::from_str(integration.template()).unwrap_or_default();
     if !settings.is_object() {
         settings = Value::Object(Default::default());
     }
@@ -174,14 +195,26 @@ pub fn without_hooks(mut settings: Value) -> Value {
     settings
 }
 
-/// Rewrites ~/.claude/settings.json after backing up the current file.
-pub fn update_claude_settings(home: &Path, change: impl FnOnce(Value) -> Value) -> Result<(), String> {
-    let path = claude_settings_path(home);
+pub fn read_hooks_file(integration: Integration, home: &Path) -> Value {
+    fs::read_to_string(integration.hooks_path(home))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or(Value::Null)
+}
+
+/// Rewrites the agent's hooks file after backing up the current one.
+pub fn update_hooks_file(
+    integration: Integration,
+    home: &Path,
+    change: impl FnOnce(Value) -> Value,
+) -> Result<(), String> {
+    let path = integration.hooks_path(home);
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let current = fs::read_to_string(&path).unwrap_or_else(|_| "{}".into());
-    let parsed: Value = serde_json::from_str(&current).map_err(|e| format!("~/.claude/settings.json isn't valid JSON: {e}"))?;
+    let parsed: Value = serde_json::from_str(&current).map_err(|e| format!("{name} isn't valid JSON: {e}"))?;
     if path.exists() {
         let stamp = Local::now().format("%Y%m%d-%H%M%S");
-        fs::write(path.with_file_name(format!("settings.json.bak-mika-{stamp}")), &current).map_err(|e| e.to_string())?;
+        fs::write(path.with_file_name(format!("{name}.bak-mika-{stamp}")), &current).map_err(|e| e.to_string())?;
     }
     let json = serde_json::to_string_pretty(&change(parsed)).map_err(|e| e.to_string())?;
     if let Some(dir) = path.parent() {
@@ -211,14 +244,16 @@ mod tests {
             "model": "opus",
             "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "say done"}]}]}
         });
-        assert!(!hooks_installed(&user));
-        let installed = with_hooks(user.clone());
-        assert!(hooks_installed(&installed));
-        // Installing twice doesn't duplicate.
-        assert_eq!(with_hooks(installed.clone()), installed);
-        let removed = without_hooks(installed);
-        assert!(!hooks_installed(&removed));
-        assert_eq!(removed, user);
+        for integration in [Integration::Claude, Integration::Codex] {
+            assert!(!hooks_installed(integration, &user));
+            let installed = with_hooks(integration, user.clone());
+            assert!(hooks_installed(integration, &installed));
+            // Installing twice doesn't duplicate.
+            assert_eq!(with_hooks(integration, installed.clone()), installed);
+            let removed = without_hooks(installed);
+            assert!(!hooks_installed(integration, &removed));
+            assert_eq!(removed, user);
+        }
     }
 
     #[test]

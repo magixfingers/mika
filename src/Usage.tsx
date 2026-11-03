@@ -386,7 +386,7 @@ export function Sessions({
               key={`${row.s.provider}:${row.s.id}`}
               s={row.s}
               max={max}
-              live={row.s.provider === "claude" ? statuses.find((st) => st.session_id === row.s.id) : undefined}
+              live={statuses.find((st) => st.agent === row.s.provider && st.session_id === row.s.id)}
             />
           ),
         )}

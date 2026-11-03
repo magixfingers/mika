@@ -53,12 +53,26 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** Claude Code hooks: shows whether they're installed, with install and remove buttons. */
-function HooksRow() {
+const HOOK_COPY = {
+  claude: {
+    label: "Claude Code hooks",
+    on: "Installed. New Claude Code sessions tell Mika when they're thinking, working or waiting for you.",
+    off: "Lets Mika see when Claude Code is thinking, working or waiting for you, and alert you. Your settings.json is backed up first.",
+  },
+  codex: {
+    label: "Codex hooks",
+    on: "Installed. Codex asks you once to trust them; after that, Codex tells Mika when it's working or needs your approval.",
+    off: "Lets Mika see when Codex is working or waiting for your approval, and alert you. Your hooks.json is backed up first.",
+  },
+};
+
+/** An agent's hooks: whether they're installed, with install and remove buttons. */
+function HooksRow({ agent }: { agent: "claude" | "codex" }) {
+  const copy = HOOK_COPY[agent];
   const [installed, setInstalled] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const refresh = () => invoke<boolean>("hooks_status").then(setInstalled).catch((e) => setError(String(e)));
+  const refresh = () => invoke<boolean>("hooks_status", { agent }).then(setInstalled).catch((e) => setError(String(e)));
   useEffect(() => {
     refresh();
   }, []);
@@ -66,7 +80,7 @@ function HooksRow() {
     setBusy(true);
     setError(null);
     try {
-      await invoke(command);
+      await invoke(command, { agent });
     } catch (e) {
       setError(String(e));
     }
@@ -75,13 +89,8 @@ function HooksRow() {
   };
   return (
     <Row
-      label="Claude Code hooks"
-      hint={
-        error ??
-        (installed
-          ? "Installed. New Claude Code sessions report their status and alerts to Mika."
-          : "Not installed. Install to get live status and “needs you” alerts. Your settings.json is backed up first.")
-      }
+      label={copy.label}
+      hint={error ?? (installed ? copy.on : copy.off)}
     >
       {installed === null ? null : installed ? (
         <button className="button" disabled={busy} onClick={() => run("remove_hooks")}>
@@ -207,7 +216,8 @@ export function SettingsPage() {
       </Section>
 
       <Section title="Integrations">
-        <HooksRow />
+        <HooksRow agent="claude" />
+        <HooksRow agent="codex" />
       </Section>
 
       <Section title="General">

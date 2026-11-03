@@ -14,7 +14,7 @@ use notify::{RecursiveMode, Watcher};
 
 use claude_limits::ClaudeLimits;
 use sampler::{Sampler, Snapshot};
-use settings::Settings;
+use settings::{Integration, Settings};
 use status::{AgentState, SessionStatus, Tracker};
 use tokens::{TokenScanner, TokenStats};
 use tauri::menu::{Menu, MenuItem};
@@ -94,22 +94,21 @@ fn preview_sound(name: String) {
 }
 
 #[tauri::command]
-fn hooks_status(app: AppHandle) -> Result<bool, String> {
+fn hooks_status(app: AppHandle, agent: Integration) -> Result<bool, String> {
     let home = app.path().home_dir().map_err(|e| e.to_string())?;
-    let text = std::fs::read_to_string(settings::claude_settings_path(&home)).unwrap_or_else(|_| "{}".into());
-    Ok(serde_json::from_str(&text).is_ok_and(|v| settings::hooks_installed(&v)))
+    Ok(settings::hooks_installed(agent, &settings::read_hooks_file(agent, &home)))
 }
 
 #[tauri::command]
-fn install_hooks(app: AppHandle) -> Result<(), String> {
+fn install_hooks(app: AppHandle, agent: Integration) -> Result<(), String> {
     let home = app.path().home_dir().map_err(|e| e.to_string())?;
-    settings::update_claude_settings(&home, settings::with_hooks)
+    settings::update_hooks_file(agent, &home, |v| settings::with_hooks(agent, v))
 }
 
 #[tauri::command]
-fn remove_hooks(app: AppHandle) -> Result<(), String> {
+fn remove_hooks(app: AppHandle, agent: Integration) -> Result<(), String> {
     let home = app.path().home_dir().map_err(|e| e.to_string())?;
-    settings::update_claude_settings(&home, settings::without_hooks)
+    settings::update_hooks_file(agent, &home, settings::without_hooks)
 }
 
 /// Gets the user's attention when an agent needs them: a sound that needs no
