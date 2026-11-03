@@ -200,7 +200,8 @@ struct FileState {
     codex_session: Option<String>,
     /// Set when this file is a spawned subagent thread.
     codex_subagent_id: Option<String>,
-    codex_last_total: u64,
+    /// Running totals from the last token event: total, input, cached input, output.
+    codex_totals: [u64; 4],
 }
 
 pub struct TokenScanner {
@@ -440,26 +441,41 @@ impl TokenScanner {
         }
 
         let info = &p["info"];
-        let total = info["total_token_usage"]["total_tokens"].as_u64().unwrap_or(0);
+        let running = &info["total_token_usage"];
+        let field = |v: &Value, k: &str| v[k].as_u64().unwrap_or(0);
+        let totals = [
+            field(running, "total_tokens"),
+            field(running, "input_tokens"),
+            field(running, "cached_input_tokens"),
+            field(running, "output_tokens"),
+        ];
         let state = self.files.entry(path.to_path_buf()).or_default();
         // Codex re-emits the running total without new usage; skip repeats.
-        if info.is_null() || total == state.codex_last_total {
+        if info.is_null() || totals[0] == state.codex_totals[0] {
             return;
         }
-        state.codex_last_total = total;
+        let previous = std::mem::replace(&mut state.codex_totals, totals);
         let Some(key) = state.codex_session.clone() else { return };
         let model = state.codex_model.clone().unwrap_or_else(|| "codex".into());
         let effort = state.codex_effort.clone();
         let subagent_id = state.codex_subagent_id.clone();
 
         let last = &info["last_token_usage"];
-        let input = last["input_tokens"].as_u64().unwrap_or(0);
-        let cached = last["cached_input_tokens"].as_u64().unwrap_or(0);
+        let input = field(last, "input_tokens");
+        // Usage is the growth of the running totals: Codex sometimes skips a
+        // per-call event, and summing last_token_usage would lose those calls.
+        // If the totals went backwards (a reset), fall back to the last call.
+        let grew = totals.iter().zip(&previous).all(|(now, before)| now >= before);
+        let [d_input, d_cached, d_output] = if grew {
+            [totals[1] - previous[1], totals[2] - previous[2], totals[3] - previous[3]]
+        } else {
+            [input, field(last, "cached_input_tokens"), field(last, "output_tokens")]
+        };
         let usage = Usage {
             // OpenAI counts cached tokens inside input_tokens.
-            input: input.saturating_sub(cached),
-            output: last["output_tokens"].as_u64().unwrap_or(0),
-            cache_read: cached,
+            input: d_input.saturating_sub(d_cached),
+            output: d_output,
+            cache_read: d_cached,
             cache_write: 0,
         };
         if model == REVIEW_MODEL {
@@ -681,9 +697,11 @@ mod tests {
         // The same message streamed twice must count once.
         write(&claude, &[assistant, assistant, r#"{"type":"custom-title","customTitle":"Fix bug","sessionId":"s1"}"#]);
         write(&index, &[r#"{"id":"c1","thread_name":"Codex task"}"#]);
-        let count = |total: u64| {
+        // Running totals for `calls` calls of 100 input (60 cached) and 5 output tokens.
+        let count = |calls: u64| {
+            let (total, input, cached, output) = (105 * calls, 100 * calls, 60 * calls, 5 * calls);
             format!(
-                r#"{{"timestamp":"2026-11-03T02:00:00Z","type":"event_msg","payload":{{"type":"token_count","info":{{"total_token_usage":{{"total_tokens":{total}}},"last_token_usage":{{"input_tokens":100,"cached_input_tokens":60,"output_tokens":5}}}},"rate_limits":{{"plan_type":"pro","primary":{{"used_percent":23.0,"window_minutes":10080,"resets_at":1793776467}}}}}}}}"#
+                r#"{{"timestamp":"2026-11-03T02:00:00Z","type":"event_msg","payload":{{"type":"token_count","info":{{"total_token_usage":{{"total_tokens":{total},"input_tokens":{input},"cached_input_tokens":{cached},"output_tokens":{output}}},"last_token_usage":{{"input_tokens":100,"cached_input_tokens":60,"output_tokens":5}}}},"rate_limits":{{"plan_type":"pro","primary":{{"used_percent":23.0,"window_minutes":10080,"resets_at":1793776467}}}}}}}}"#
             )
         };
         write(
@@ -691,8 +709,8 @@ mod tests {
             &[
                 r#"{"type":"session_meta","payload":{"id":"c1","cwd":"/q"}}"#,
                 r#"{"type":"turn_context","payload":{"model":"gpt-6.1-sol"}}"#,
-                &count(105),
-                &count(105),
+                &count(1),
+                &count(1),
             ],
         );
 
@@ -713,7 +731,7 @@ mod tests {
 
         // Nothing new: no change. New line: only it is read.
         assert!(!scanner.scan());
-        write(&codex, &[&count(210)]);
+        write(&codex, &[&count(2)]);
         assert!(scanner.scan());
         let codex_s = scanner.stats().sessions.total.into_iter().find(|s| s.id == "c1").unwrap();
         assert_eq!(codex_s.tokens, 210);
@@ -764,7 +782,7 @@ mod subagent_tests {
         std::fs::create_dir_all(&day).unwrap();
         let ts = "2026-11-03T01:00:00Z";
         let write = |name: &str, lines: &[String]| std::fs::write(day.join(name), lines.join("\n") + "\n").unwrap();
-        let count = format!(r#"{{"timestamp":"{ts}","type":"event_msg","payload":{{"type":"token_count","info":{{"total_token_usage":{{"total_tokens":10}},"last_token_usage":{{"input_tokens":10,"output_tokens":0}}}}}}}}"#);
+        let count = format!(r#"{{"timestamp":"{ts}","type":"event_msg","payload":{{"type":"token_count","info":{{"total_token_usage":{{"total_tokens":10,"input_tokens":10,"output_tokens":0}},"last_token_usage":{{"input_tokens":10,"output_tokens":0}}}}}}}}"#);
         write("parent.jsonl", &[
             format!(r#"{{"timestamp":"{ts}","type":"session_meta","payload":{{"id":"p"}}}}"#),
             format!(r#"{{"timestamp":"{ts}","type":"turn_context","payload":{{"model":"gpt-6.1-terra"}}}}"#),
@@ -784,5 +802,26 @@ mod subagent_tests {
         let s = scanner.stats().sessions.total.into_iter().find(|s| s.id == "p").unwrap();
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(s.subagents, 1);
+    }
+}
+
+#[cfg(test)]
+mod provider_totals {
+    use super::*;
+
+    /// All-time tokens per provider from this machine's logs:
+    /// `cargo test --release --lib provider_totals -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn provider_totals() {
+        let mut scanner = TokenScanner::new(&PathBuf::from(std::env::var("HOME").unwrap()));
+        scanner.scan();
+        let (mut claude, mut codex) = (0u64, 0u64);
+        for models in scanner.days.values() {
+            for (m, u) in models {
+                if m.starts_with("claude") { claude += u.total() } else { codex += u.total() }
+            }
+        }
+        println!("MIKA claude={claude} codex={codex}");
     }
 }
