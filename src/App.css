@@ -106,6 +106,21 @@ html.liquid .glass {
 
 /* --- Layout --- */
 
+.drag-strip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  z-index: 10;
+}
+
+.app-header {
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .app {
   height: 100vh;
   /* Top padding clears the overlay traffic lights. */

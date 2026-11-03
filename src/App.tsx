@@ -119,6 +119,20 @@ function AgentRow({ agent, history, status }: { agent: Agent; history: number[];
 
 type Page = "overview" | "agents";
 
+/**
+ * Moves the window when the header or top strip is dragged. data-tauri-drag-region
+ * only reacts to the element itself, not its children, so the header's text and
+ * character blocked dragging; this handles any press there except on controls.
+ */
+function dragWindow(e: React.MouseEvent) {
+  if (e.button !== 0 || (e.target as HTMLElement).closest("button, a, input")) return;
+  if (e.detail === 2) {
+    getCurrentWindow().toggleMaximize();
+    return;
+  }
+  getCurrentWindow().startDragging();
+}
+
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mainRef = useRef<HTMLElement>(null);
@@ -227,9 +241,11 @@ function App() {
     <>
       <div className="backdrop" aria-hidden />
       <canvas className="liquid-canvas" ref={canvasRef} aria-hidden />
+      {/* The strip beside the traffic lights, where a title bar would be. */}
+      <div className="drag-strip" onMouseDown={dragWindow} aria-hidden />
       <main className="app" ref={mainRef}>
-        <header className="app-header" data-tauri-drag-region>
-          <div className="app-title" data-tauri-drag-region data-alert={alerting || undefined}>
+        <header className="app-header" onMouseDown={dragWindow}>
+          <div className="app-title" data-alert={alerting || undefined}>
             <Mika state={overall?.state ?? "idle"} size={40} />
             <div>
               <h1>Mika</h1>
