@@ -538,17 +538,50 @@ h2,
 
 /* Sessions take the remaining height and show as many rows as fit. */
 .sessions {
-  flex: 0 1 auto;
+  flex: 1;
   min-height: 0;
 }
 
+/* Fills the card; Sessions measures it to decide how many rows fit a page. */
 .sessions .list {
+  flex: 1;
   min-height: 0;
   overflow: hidden;
 }
 
-.sessions .list[data-clipped] {
-  mask-image: linear-gradient(black calc(100% - 24px), transparent);
+/* app-control buttons: 6px squares, current page in ink */
+.pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+}
+
+.pager button {
+  min-width: 2em;
+  height: 2em;
+  padding: 0 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--elevated);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--body);
+  cursor: pointer;
+}
+
+.pager button[aria-current="page"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.pager button:disabled {
+  color: var(--faint);
+  cursor: default;
 }
 
 .agent-header {

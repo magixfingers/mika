@@ -303,6 +303,18 @@ function ReviewRow({ r, max }: { r: ReviewSummary; max: number }) {
   );
 }
 
+/** Page numbers to show: all when few, otherwise first, last and a window around the current one. */
+function pageItems(count: number, current: number): (number | "gap")[] {
+  if (count <= 7) return Array.from({ length: count }, (_, i) => i);
+  const keep = new Set([0, count - 1, current - 1, current, current + 1].filter((i) => i >= 0 && i < count));
+  const out: (number | "gap")[] = [];
+  [...keep].sort((a, b) => a - b).forEach((i, k, all) => {
+    if (k > 0 && i - all[k - 1] > 1) out.push("gap");
+    out.push(i);
+  });
+  return out;
+}
+
 export function Sessions({
   sessions,
   reviews,
@@ -312,19 +324,6 @@ export function Sessions({
   reviews: ReviewSummary | null;
   statuses: SessionStatus[];
 }) {
-  // Fade the bottom edge only when rows are actually cut off.
-  const listRef = useRef<HTMLUListElement>(null);
-  const [clipped, setClipped] = useState(false);
-  useLayoutEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
-    const check = () => setClipped(el.scrollHeight > el.clientHeight + 1);
-    const observer = new ResizeObserver(check);
-    observer.observe(el);
-    check();
-    return () => observer.disconnect();
-  }, [sessions, reviews]);
-
   // Rows sort by recency; the review summary slots in by its latest run.
   const rows: ({ kind: "session"; s: SessionUsage; at: number } | { kind: "review"; r: ReviewSummary; at: number })[] = [
     ...sessions.map((s) => ({ kind: "session" as const, s, at: s.last_active_ms })),
@@ -332,12 +331,42 @@ export function Sessions({
   ].sort((a, b) => b.at - a.at);
   const max = Math.max(1, ...sessions.map((s) => s.tokens), reviews?.tokens ?? 0);
 
+  // A page holds as many whole rows as fit the card, measured from a rendered row.
+  const listRef = useRef<HTMLUListElement>(null);
+  const [perPage, setPerPage] = useState(5);
+  const [page, setPage] = useState(0);
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const measure = () => {
+      const row = el.firstElementChild as HTMLElement | null;
+      if (!row) return;
+      const gap = parseFloat(getComputedStyle(el).rowGap) || 0;
+      setPerPage(Math.max(1, Math.floor((el.clientHeight + gap) / (row.offsetHeight + gap))));
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    measure();
+    return () => observer.disconnect();
+  }, [rows.length > 0]);
+
+  const pages = Math.max(1, Math.ceil(rows.length / perPage));
+  const current = Math.min(page, pages - 1);
+  const visible = rows.slice(current * perPage, (current + 1) * perPage);
+
   return (
     <section className="panel sessions">
-      <h2>Sessions</h2>
+      <div className="row">
+        <h2>Sessions</h2>
+        {rows.length > 0 && (
+          <span className="muted small">
+            {current * perPage + 1}–{current * perPage + visible.length} of {rows.length}
+          </span>
+        )}
+      </div>
       {rows.length === 0 && <p className="muted">No sessions in this range.</p>}
-      <ul className="list" ref={listRef} data-clipped={clipped || undefined}>
-        {rows.map((row) =>
+      <ul className="list" ref={listRef}>
+        {visible.map((row) =>
           row.kind === "review" ? (
             <ReviewRow key="review" r={row.r} max={max} />
           ) : (
@@ -350,6 +379,27 @@ export function Sessions({
           ),
         )}
       </ul>
+      {pages > 1 && (
+        <nav className="pager" aria-label="Session pages">
+          <button onClick={() => setPage(current - 1)} disabled={current === 0} aria-label="Previous page">
+            ‹
+          </button>
+          {pageItems(pages, current).map((item, k) =>
+            item === "gap" ? (
+              <span key={`gap${k}`} className="muted">
+                …
+              </span>
+            ) : (
+              <button key={item} onClick={() => setPage(item)} aria-current={item === current ? "page" : undefined}>
+                {item + 1}
+              </button>
+            ),
+          )}
+          <button onClick={() => setPage(current + 1)} disabled={current === pages - 1} aria-label="Next page">
+            ›
+          </button>
+        </nav>
+      )}
     </section>
   );
 }
