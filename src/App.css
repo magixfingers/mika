@@ -41,7 +41,9 @@
 
 body {
   margin: 0;
-  background: var(--canvas);
+  /* Transparent: an opaque body would paint over the backdrop layers at z-index -1.
+     The canvas color comes from :root. */
+  background: transparent;
   /* No scrollbar: pages are sized to fit (see .pages). */
   overflow: hidden;
 }

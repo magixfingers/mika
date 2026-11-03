@@ -506,6 +506,10 @@ impl TokenScanner {
     }
 
     fn record(&mut self, key: &str, model: &str, usage: Usage, ts_ms: i64) {
+        // Events with no new tokens would only add empty rows (e.g. "codex 0 0%").
+        if usage.total() == 0 {
+            return;
+        }
         let day = local_date(ts_ms);
         if model != REVIEW_MODEL {
             let session = self.sessions.entry(key.to_string()).or_default();

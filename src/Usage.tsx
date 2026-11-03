@@ -185,7 +185,10 @@ export function Limits({ codex, claude }: { codex: RateLimit | null; claude: Cla
 }
 
 export function Models({ usage }: { usage: Map<string, ModelUsage> }) {
-  const rows = [...usage.entries()].sort((a, b) => b[1].tokens - a[1].tokens).slice(0, 6);
+  const rows = [...usage.entries()]
+    .filter(([, u]) => u.tokens > 0)
+    .sort((a, b) => b[1].tokens - a[1].tokens)
+    .slice(0, 6);
   const total = rows.reduce((s, [, u]) => s + u.tokens, 0) || 1;
   return (
     <section className="panel">
