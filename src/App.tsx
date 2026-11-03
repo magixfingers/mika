@@ -266,10 +266,9 @@ function App() {
   const tabPill = useSlidingPill(tabbarRef, '[aria-current="page"]', page);
   useEntrance(mainRef, ".totals, .panel", `${page}:${tokens !== null}`);
 
-  // Pop up once each time a session starts waiting for the user, and close the
-  // popup when nothing is waiting any more (e.g. answered in the agent's own app).
+  // Pop up once each time a session starts waiting for the user. The popup stays
+  // until the user dismisses or opens it, even if the session moves on.
   const waitingIds = useRef(new Set<string>());
-  const alertedId = useRef<string | null>(null);
   useEffect(() => {
     const waiting = statuses
       .filter((s) => s.state === "waiting" && tracked(s.agent))
@@ -288,10 +287,6 @@ function App() {
           since_ms: fresh.since_ms,
         },
       }).catch((err) => invoke("log_frontend", { message: `alert popup failed: ${err}` }));
-      alertedId.current = fresh.session_id;
-    } else if (alertedId.current && !waiting.some((s) => s.session_id === alertedId.current)) {
-      invoke("dismiss_alert");
-      alertedId.current = null;
     }
     waitingIds.current = new Set(waiting.map((s) => s.session_id));
   }, [statuses]);

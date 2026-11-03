@@ -14,9 +14,10 @@ const WINDOW: &str = "alert";
 const WIDTH: f64 = 380.0;
 const HEIGHT: f64 = 156.0;
 const MARGIN: f64 = 16.0;
-/// The ringtone repeats this often, and gives up after this many rings (about 30 s).
+/// The ringtone plays this many times, this far apart; the popup itself stays
+/// until the user responds.
 const RING_GAP: Duration = Duration::from_secs(2);
-const MAX_RINGS: u32 = 15;
+const MAX_RINGS: u32 = 3;
 
 /// What the popup shows, sent by the UI when a session starts waiting.
 #[derive(Debug, Clone, Serialize, Deserialize)]
