@@ -94,6 +94,10 @@ impl Tracker {
         entry.since_ms = now_ms;
     }
 
+    pub fn get(&self, session_id: &str) -> Option<&SessionStatus> {
+        self.sessions.get(session_id)
+    }
+
     pub fn snapshot(&mut self, now_ms: u64) -> Vec<SessionStatus> {
         self.sessions
             .retain(|_, s| now_ms.saturating_sub(s.since_ms) < STALE_MS);
