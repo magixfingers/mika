@@ -2,7 +2,7 @@
 
 **Your AI coding agents, at a glance.**
 
-Mika is a small companion that lives in your Mac's menu bar and keeps an eye on Claude Code and Codex for you. It shows what every agent is doing, how many tokens they're using, how close you are to your plan limits, and how hard your Mac is working. When an agent needs you, Mika lets you know with a sound.
+Mika is a small companion that lives in your Mac's menu bar and keeps an eye on Claude Code and Codex for you. It shows what every agent is doing, how many tokens they're using, how close you are to your plan limits, and how hard your Mac is working. When an agent needs you, Mika pops up on your desktop with a ringtone and takes you straight to it.
 
 ---
 
@@ -34,13 +34,14 @@ Each mood has its own set of animations, played in a different order every time,
 
 ## Never miss a "needs you" moment
 
-When an agent stops to ask a question or needs your approval, Mika:
+When Claude Code or Codex stops to ask a question or needs your approval, Mika:
 
-- 🔔 plays a sound,
+- pops up a small card on the screen you're using, showing which agent is waiting, what it wants to do, and for how long,
+- 🔔 rings your chosen sound three times,
 - bounces in your Dock,
 - turns its status red and shows *which* project is waiting.
 
-Once per request, never nagging.
+The card stays until you act on it. Click **Open** (or press Enter) to jump to the app running that session, or **Dismiss** (Escape) to close it. Clicking the red "Needs you" header in Mika also takes you there.
 
 ---
 
@@ -74,6 +75,20 @@ Live **CPU**, **memory**, **swap** and **temperature** for the whole machine, pl
 
 ---
 
+## Make it yours
+
+Open **Settings** from the gear in the top-right corner:
+
+- **Alerts:** sound on or off and which sound, the popup, Dock bounce, alerts when an agent finishes, and quiet hours.
+- **Display:** default range, cost estimates, animation level (full, subtle, off) and the menu bar title style.
+- **Data & privacy:** choose which agents to track, turn Claude limits (and its Keychain and network access) off, and pick an update speed.
+- **Integrations:** install or remove Claude Code and Codex hooks with one click. Your existing file is backed up first.
+- **General:** launch at login.
+
+Changes apply immediately.
+
+---
+
 ## Designed to stay out of the way
 
 - Lives in the menu bar. Click to open, click to hide.
@@ -94,7 +109,7 @@ Mika runs entirely on your Mac. It reads your agents' local logs and process lis
 | | Live status | Tokens and cost | Plan limits | Resources |
 | --- | --- | --- | --- | --- |
 | **Claude Code** | ✓ thinking, tools, needs you, done | ✓ | ✓ | ✓ |
-| **Codex** (CLI and ChatGPT app) | ✓ working or idle | ✓ | ✓ | ✓ |
+| **Codex** (CLI and ChatGPT app) | ✓ working, needs you, done | ✓ | ✓ | ✓ |
 
 macOS only, for now.
 
@@ -103,7 +118,7 @@ macOS only, for now.
 ## Getting started
 
 1. Install and open Mika. It appears in your menu bar.
-2. **For live Claude Code status and alerts**, add Mika's hooks: merge the `hooks` block from [`hooks/claude-code-settings.json`](hooks/claude-code-settings.json) into `~/.claude/settings.json`. New Claude Code sessions will then report to Mika.
+2. **For live status and alerts**, open Settings → Integrations and click **Install** for Claude Code and Codex. New sessions will then report to Mika. Codex asks you once to trust the new hooks; approve them in Codex. (To do it by hand, merge [`hooks/claude-code-settings.json`](hooks/claude-code-settings.json) into `~/.claude/settings.json` and [`hooks/codex-hooks.json`](hooks/codex-hooks.json) into `~/.codex/hooks.json`.)
 3. The first time Mika shows your Claude limits, macOS asks to allow access to Claude Code's sign-in. Allow it to see them.
 
 That's it. Start an agent and watch Mika come to life.
@@ -114,7 +129,7 @@ That's it. Start an agent and watch Mika come to life.
 
 - Costs are estimates based on public API prices, not your actual bill.
 - Claude Code doesn't record its context size, so the context bar appears for Codex sessions only.
-- Codex can't tell Mika when it's waiting for you, so "needs you" alerts come from Claude Code.
+- "Open" brings the right app to the front, but can't pick a specific tab or thread inside it.
 - Claude limits come from a service Anthropic hasn't documented publicly and may change.
 
 ---
