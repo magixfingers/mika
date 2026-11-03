@@ -124,3 +124,26 @@ export interface ClaudeLimits {
   plan: string | null;
   windows: LimitWindow[];
 }
+
+// Mirrors src-tauri/src/settings.rs.
+
+export type Motion = "full" | "subtle" | "off";
+export type TrayStyle = "full" | "compact" | "icon";
+
+export interface Settings {
+  sound_enabled: boolean;
+  sound: string;
+  dock_bounce: boolean;
+  alert_on_done: boolean;
+  quiet_hours: boolean;
+  quiet_start: string;
+  quiet_end: string;
+  default_range: "day" | "month" | "total";
+  show_cost: boolean;
+  motion: Motion;
+  tray_title: TrayStyle;
+  track_claude: boolean;
+  track_codex: boolean;
+  claude_limits: boolean;
+  sample_interval_ms: number;
+}

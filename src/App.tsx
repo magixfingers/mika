@@ -5,10 +5,12 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import type { Agent, AgentState, ClaudeLimits, SessionStatus, Snapshot, TokenStats } from "./types";
 import { Mika, STATE_LABELS } from "./Mika";
-import { Activity, Limits, Models, ProviderMark, RangePicker, Sessions, SystemPanel, Totals, usageIn, type Range } from "./Usage";
+import { Activity, Limits, Models, ProviderMark, providerOf, RangePicker, Sessions, SystemPanel, Totals, usageIn, type Range } from "./Usage";
 import { compact, formatBytes, formatUptime, shortPath } from "./format";
 import { startLiquidGlass } from "./liquid";
 import { useEntrance, usePop, useShake, useSlidingPill } from "./motion";
+import { useSettings } from "./settings";
+import { SettingsPage } from "./SettingsPage";
 import "./App.css";
 
 // 5 minutes of history at the 1-second sample interval.
@@ -118,7 +120,7 @@ function AgentRow({ agent, history, status }: { agent: Agent; history: number[];
   );
 }
 
-type Page = "overview" | "agents";
+type Page = "overview" | "agents" | "settings";
 
 /**
  * Moves the window when the header or top strip is dragged. data-tauri-drag-region
@@ -144,6 +146,15 @@ function App() {
   const [tokens, setTokens] = useState<TokenStats | null>(null);
   const [claudeLimits, setClaudeLimits] = useState<ClaudeLimits | null>(null);
   const [range, setRange] = useState<Range>("day");
+  const { settings } = useSettings();
+
+  // Open on the user's default range once settings arrive (later changes don't move the view).
+  const rangeChosen = useRef(false);
+  useEffect(() => {
+    if (!settings || rangeChosen.current) return;
+    rangeChosen.current = true;
+    setRange(settings.default_range);
+  }, [settings]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -194,7 +205,10 @@ function App() {
     };
   }, []);
 
-  const agents = snapshot?.agents ?? [];
+  // Agents the user turned off in settings are left out everywhere.
+  const tracked = (provider: "claude" | "codex") =>
+    provider === "claude" ? settings?.track_claude !== false : settings?.track_codex !== false;
+  const agents = (snapshot?.agents ?? []).filter((a) => tracked(a.kind));
   // Hooks report a session's folder, so an agent shows the most urgent session in its folder.
   // Hook states win when they report activity; otherwise CPU use marks the agent as working.
   const statusFor = (agent: Agent): SessionStatus | null => {
@@ -228,7 +242,24 @@ function App() {
     }
     waitingIds.current = new Set(waiting.map((s) => s.session_id));
   }, [statuses]);
-  const usage = useMemo(() => usageIn(tokens?.days ?? [], range), [tokens, range]);
+
+  // Optionally, alert once each time a session finishes.
+  const doneIds = useRef(new Set<string>());
+  useEffect(() => {
+    const done = statuses.filter((s) => s.state === "done");
+    if (settings?.alert_on_done) {
+      for (const s of done) {
+        if (doneIds.current.has(s.session_id)) continue;
+        invoke("alert", { title: "Mika · an agent finished", body: `Claude Code in ${shortPath(s.cwd)} is done.` });
+      }
+    }
+    doneIds.current = new Set(done.map((s) => s.session_id));
+  }, [statuses, settings?.alert_on_done]);
+
+  const usage = useMemo(
+    () => usageIn(tokens?.days ?? [], range, (model) => tracked(providerOf(model))),
+    [tokens, range, settings?.track_claude, settings?.track_codex],
+  );
 
   // On first load, grow the window so the whole overview shows without scrolling.
   const fitted = useRef(false);
@@ -279,7 +310,10 @@ function App() {
             ) : (
               <>
                 <Totals usage={usage} range={range} />
-                <Limits codex={tokens.codex_limit} claude={claudeLimits} />
+                <Limits
+                  codex={tracked("codex") ? tokens.codex_limit : null}
+                  claude={tracked("claude") && settings?.claude_limits !== false ? claudeLimits : null}
+                />
                 <Models usage={usage} />
                 <Activity days={tokens.days} />
               </>
@@ -303,15 +337,26 @@ function App() {
                 ))}
               </ul>
             </section>
-            {tokens && <Sessions key={range} sessions={tokens.sessions[range]} reviews={tokens.reviews[range]} statuses={statuses} />}
+            {tokens && (
+              <Sessions
+                key={range}
+                sessions={tokens.sessions[range].filter((s) => tracked(s.provider))}
+                reviews={tracked("codex") ? tokens.reviews[range] : null}
+                statuses={statuses}
+              />
+            )}
+          </div>
+
+          <div className="page page-settings">
+            <SettingsPage />
           </div>
         </div>
 
         <nav className="glass tabbar" aria-label="Pages" ref={tabbarRef}>
           <span className="pill" ref={tabPill} aria-hidden />
-          {(["overview", "agents"] as Page[]).map((p) => (
+          {(["overview", "agents", "settings"] as Page[]).map((p) => (
             <button key={p} aria-current={page === p ? "page" : undefined} onClick={() => setPage(p)}>
-              {p === "overview" ? "Overview" : `Agents${agents.length ? ` · ${agents.length}` : ""}`}
+              {p === "overview" ? "Overview" : p === "settings" ? "Settings" : `Agents${agents.length ? ` · ${agents.length}` : ""}`}
             </button>
           ))}
           <span className="rate">{compact(tokens?.tokens_per_sec ?? 0)} tok/s</span>

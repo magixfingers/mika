@@ -1,5 +1,6 @@
 mod claude_limits;
 mod sampler;
+mod settings;
 mod status;
 mod tokens;
 
@@ -13,13 +14,13 @@ use notify::{RecursiveMode, Watcher};
 
 use claude_limits::ClaudeLimits;
 use sampler::{Sampler, Snapshot};
+use settings::Settings;
 use status::{AgentState, SessionStatus, Tracker};
 use tokens::{TokenScanner, TokenStats};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-const SAMPLE_INTERVAL: Duration = Duration::from_secs(1);
 /// Longest wait between token updates when nothing changes (keeps tok/s decaying).
 const TOKEN_TICK: Duration = Duration::from_secs(1);
 /// Quiet gap that ends a burst of file-change events.
@@ -57,17 +58,76 @@ fn claude_limits(latest: State<'_, LatestClaudeLimits>) -> Option<ClaudeLimits> 
 #[derive(Default)]
 struct LatestTokens(Mutex<Option<TokenStats>>);
 
-const ALERT_SOUND: &str = "/System/Library/Sounds/Glass.aiff";
+/// User settings and the file they're saved to.
+struct AppSettings {
+    path: PathBuf,
+    value: Mutex<Settings>,
+}
+
+fn current_settings(app: &AppHandle) -> Settings {
+    app.state::<AppSettings>().value.lock().map(|s| s.clone()).unwrap_or_default()
+}
+
+#[tauri::command]
+fn get_settings(app: AppHandle) -> Settings {
+    current_settings(&app)
+}
+
+#[tauri::command]
+fn set_settings(app: AppHandle, settings: Settings) -> Result<Settings, String> {
+    let settings = settings.sanitized();
+    let state = app.state::<AppSettings>();
+    settings::save(&state.path, &settings)?;
+    if let Ok(mut value) = state.value.lock() {
+        *value = settings.clone();
+    }
+    let _ = app.emit("settings", &settings);
+    publish_statuses(&app);
+    Ok(settings)
+}
+
+#[tauri::command]
+fn preview_sound(name: String) {
+    if settings::SOUNDS.contains(&name.as_str()) {
+        let _ = std::process::Command::new("afplay").arg(format!("/System/Library/Sounds/{name}.aiff")).spawn();
+    }
+}
+
+#[tauri::command]
+fn hooks_status(app: AppHandle) -> Result<bool, String> {
+    let home = app.path().home_dir().map_err(|e| e.to_string())?;
+    let text = std::fs::read_to_string(settings::claude_settings_path(&home)).unwrap_or_else(|_| "{}".into());
+    Ok(serde_json::from_str(&text).is_ok_and(|v| settings::hooks_installed(&v)))
+}
+
+#[tauri::command]
+fn install_hooks(app: AppHandle) -> Result<(), String> {
+    let home = app.path().home_dir().map_err(|e| e.to_string())?;
+    settings::update_claude_settings(&home, settings::with_hooks)
+}
+
+#[tauri::command]
+fn remove_hooks(app: AppHandle) -> Result<(), String> {
+    let home = app.path().home_dir().map_err(|e| e.to_string())?;
+    settings::update_claude_settings(&home, settings::without_hooks)
+}
 
 /// Gets the user's attention when an agent needs them: a sound that needs no
 /// permission, a bouncing Dock icon, and a notification where macOS allows it
 /// (notifications from scripts can be silently blocked, so they are a bonus).
+/// The sound and bounce follow the user's alert settings and quiet hours.
 #[tauri::command]
 fn alert(app: AppHandle, title: String, body: String) {
-    if let Err(err) = std::process::Command::new("afplay").arg(ALERT_SOUND).spawn() {
+    let settings = current_settings(&app);
+    if settings.sound_enabled
+        && !settings.is_quiet_now()
+        && let Err(err) = std::process::Command::new("afplay").arg(settings.sound_path()).spawn()
+    {
         eprintln!("mika: could not play alert sound: {err}");
     }
-    if let Some(window) = app.get_webview_window("main") {
+    if settings.dock_bounce
+        && let Some(window) = app.get_webview_window("main")
+    {
         let _ = window.request_user_attention(Some(tauri::UserAttentionType::Critical));
     }
     let quote = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
@@ -101,11 +161,18 @@ fn state_glyph(state: AgentState) -> &'static str {
     }
 }
 
-fn tray_title(snapshot: &Snapshot, state: Option<AgentState>) -> String {
+/// `style` is the user's choice: "full", "compact" (symbol and count) or "icon" (no text).
+fn tray_title(snapshot: &Snapshot, state: Option<AgentState>, style: &str) -> String {
+    if style == "icon" {
+        return String::new();
+    }
     if snapshot.agents.is_empty() {
         return "Mika".into();
     }
     let glyph = state.map(|s| format!("{} ", state_glyph(s))).unwrap_or_default();
+    if style == "compact" {
+        return format!("{glyph}{}", snapshot.agents.len());
+    }
     let cpu: f32 = snapshot.agents.iter().map(|a| a.cpu).sum();
     let mem: u64 = snapshot.agents.iter().map(|a| a.memory).sum();
     format!(
@@ -145,7 +212,7 @@ fn spawn_sampler(app: AppHandle) {
             }
             // Re-publishing statuses each tick lets done sessions settle to idle.
             publish_statuses(&app);
-            thread::sleep(SAMPLE_INTERVAL);
+            thread::sleep(Duration::from_millis(current_settings(&app).sample_interval_ms));
         }
     });
 }
@@ -158,7 +225,7 @@ fn publish_statuses(app: &AppHandle) {
     };
     let _ = app.emit("statuses", &sessions);
     let title = match app.state::<Latest>().0.lock() {
-        Ok(latest) => latest.as_ref().map(|s| tray_title(s, status::overall(&sessions))),
+        Ok(latest) => latest.as_ref().map(|s| tray_title(s, status::overall(&sessions), &current_settings(app).tray_title)),
         Err(_) => None,
     };
     if let (Some(title), Some(tray)) = (title, app.tray_by_id(TRAY_ID)) {
@@ -237,6 +304,11 @@ fn spawn_claude_limits(app: AppHandle) {
     thread::spawn(move || {
         let mut last_error = None;
         loop {
+            // Off means no Keychain access and no network request at all.
+            if !current_settings(&app).claude_limits {
+                thread::sleep(Duration::from_secs(5));
+                continue;
+            }
             let wait = match claude_limits::fetch() {
                 Ok(limits) => {
                     last_error = None;
@@ -278,11 +350,12 @@ fn spawn_hook_listener(app: AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
         .manage(Latest::default())
         .manage(Statuses::default())
         .manage(LatestTokens::default())
         .manage(LatestClaudeLimits::default())
-        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens, claude_limits, alert, log_frontend])
+        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens, claude_limits, alert, log_frontend, get_settings, set_settings, preview_sound, hooks_status, install_hooks, remove_hooks])
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "Show Mika", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Mika", true, None::<&str>)?;
@@ -312,6 +385,8 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            let settings_path = app.path().app_config_dir()?.join("settings.json");
+            app.manage(AppSettings { value: Mutex::new(settings::load(&settings_path)), path: settings_path });
             spawn_sampler(app.handle().clone());
             spawn_hook_listener(app.handle().clone());
             spawn_token_scanner(app.handle().clone());
