@@ -5,7 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import type { Agent, AgentState, ClaudeLimits, SessionStatus, Snapshot, TokenStats } from "./types";
 import { Mika, STATE_LABELS } from "./Mika";
-import { Activity, Limits, Models, ProviderMark, RangePicker, Sessions, Totals, usageIn, type Range } from "./Usage";
+import { Activity, Limits, Models, ProviderMark, RangePicker, Sessions, SystemPanel, Totals, usageIn, type Range } from "./Usage";
 import { compact, formatBytes, formatUptime, shortPath } from "./format";
 import { startLiquidGlass } from "./liquid";
 import "./App.css";
@@ -247,6 +247,7 @@ function App() {
 
         <div className="pages" data-page={page}>
           <div className="page page-overview">
+            {snapshot && <SystemPanel system={snapshot.system} />}
             {tokens === null ? (
               <p className="muted loading">Reading session logs…</p>
             ) : (

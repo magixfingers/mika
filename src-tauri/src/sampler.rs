@@ -40,19 +40,46 @@ pub struct Agent {
     pub processes: Vec<ProcNode>,
 }
 
+/// macOS thermal pressure, the signal the OS uses to throttle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Thermal {
+    Normal,
+    Fair,
+    Serious,
+    Critical,
+    Unknown,
+}
+
+/// Machine-wide load.
+#[derive(Debug, Clone, Serialize)]
+pub struct SystemLoad {
+    /// Average over all cores, 0..100.
+    pub cpu: f32,
+    pub memory_used: u64,
+    pub memory_total: u64,
+    pub swap_used: u64,
+    pub swap_total: u64,
+    /// True while swap use is growing, i.e. memory is being paged out.
+    pub swapping: bool,
+    pub thermal: Thermal,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Snapshot {
     pub sampled_at_ms: u64,
+    pub system: SystemLoad,
     pub agents: Vec<Agent>,
 }
 
 pub struct Sampler {
     sys: System,
+    last_swap_used: Option<u64>,
 }
 
 impl Sampler {
     pub fn new() -> Result<Self, sysinfo::Error> {
-        Ok(Self { sys: System::new()? })
+        Ok(Self { sys: System::new()?, last_swap_used: None })
     }
 
     /// Refreshes process data and builds a snapshot. CPU figures are measured
@@ -68,11 +95,43 @@ impl Sampler {
                 .with_cmd(UpdateKind::OnlyIfNotSet)
                 .with_cwd(UpdateKind::OnlyIfNotSet),
         );
-        build_snapshot(&self.sys)
+        self.sys.refresh_cpu_usage();
+        self.sys.refresh_memory();
+        let swap_used = self.sys.used_swap();
+        // Ignore tiny jitter; a real page-out moves at least a megabyte.
+        let swapping = self.last_swap_used.is_some_and(|last| swap_used > last + (1 << 20));
+        self.last_swap_used = Some(swap_used);
+        let system = SystemLoad {
+            cpu: self.sys.global_cpu_usage(),
+            memory_used: self.sys.used_memory(),
+            memory_total: self.sys.total_memory(),
+            swap_used,
+            swap_total: self.sys.total_swap(),
+            swapping,
+            thermal: thermal_state(),
+        };
+        build_snapshot(&self.sys, system)
     }
 }
 
-fn build_snapshot(sys: &System) -> Snapshot {
+#[cfg(target_os = "macos")]
+fn thermal_state() -> Thermal {
+    use objc2_foundation::{NSProcessInfo, NSProcessInfoThermalState};
+    match NSProcessInfo::processInfo().thermalState() {
+        NSProcessInfoThermalState::Nominal => Thermal::Normal,
+        NSProcessInfoThermalState::Fair => Thermal::Fair,
+        NSProcessInfoThermalState::Serious => Thermal::Serious,
+        NSProcessInfoThermalState::Critical => Thermal::Critical,
+        _ => Thermal::Unknown,
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn thermal_state() -> Thermal {
+    Thermal::Unknown
+}
+
+fn build_snapshot(sys: &System, system: SystemLoad) -> Snapshot {
     let procs = sys.processes();
 
     let mut children: HashMap<Pid, Vec<Pid>> = HashMap::new();
@@ -101,6 +160,7 @@ fn build_snapshot(sys: &System) -> Snapshot {
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0),
+        system,
         agents,
     }
 }
@@ -309,5 +369,32 @@ mod merge_tests {
         assert_eq!(codex.pid, 11);
         assert_eq!(codex.memory, 2050);
         assert_eq!(codex.processes.len(), 2);
+    }
+}
+
+#[cfg(test)]
+mod load_check {
+    use super::*;
+
+    /// Prints Mika's system load for comparison with macOS tools:
+    /// `cargo test --release --lib system_load -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn system_load() {
+        let mut s = Sampler::new().unwrap();
+        s.sample();
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        let l = s.sample().system;
+        let gb = |b: u64| b as f64 / 1024f64.powi(3);
+        println!(
+            "MIKA cpu={:.1}% ram={:.2}/{:.2}G ({:.0}%) swap={:.2}/{:.2}G thermal={:?}",
+            l.cpu,
+            gb(l.memory_used),
+            gb(l.memory_total),
+            l.memory_used as f64 / l.memory_total as f64 * 100.0,
+            gb(l.swap_used),
+            gb(l.swap_total),
+            l.thermal
+        );
     }
 }

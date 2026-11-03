@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import type { ClaudeLimits, DayUsage, ReviewSummary, ModelUsage, Provider, RateLimit, SessionStatus, SessionUsage } from "./types";
+import type { ClaudeLimits, DayUsage, ReviewSummary, SystemLoad, Thermal, ModelUsage, Provider, RateLimit, SessionStatus, SessionUsage } from "./types";
 import { Mika, STATE_LABELS } from "./Mika";
 import { CLAUDE_LOGO, OPENAI_LOGO } from "./logos";
 import { compact, formatCost, localDate, timeUntil } from "./format";
@@ -36,6 +36,55 @@ export function RangePicker({ value, onChange }: { value: Range; onChange: (r: R
         </button>
       ))}
     </div>
+  );
+}
+
+// Thermal pressure as a bar: each step up the OS scale fills another quarter.
+const THERMAL_LEVEL: Record<Thermal, number> = { normal: 0.25, fair: 0.5, serious: 0.75, critical: 1, unknown: 0 };
+
+function LoadRow({ label, hint, fill, value }: { label: string; hint: string; fill: number; value: React.ReactNode }) {
+  return (
+    <div className="load-row" title={hint}>
+      <span className="load-label">{label}</span>
+      <div className="meter" style={{ "--fill": Math.min(1, Math.max(0, fill)) } as React.CSSProperties}>
+        <span />
+      </div>
+      <span className="load-value num">{value}</span>
+    </div>
+  );
+}
+
+export function SystemPanel({ system }: { system: SystemLoad }) {
+  const gb = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)}G`;
+  const ram = system.memory_total ? system.memory_used / system.memory_total : 0;
+  const swap = system.swap_total ? system.swap_used / system.swap_total : 0;
+  return (
+    <section className="panel load">
+      <LoadRow label="CPU" hint="Average use across all cores" fill={system.cpu / 100} value={`${Math.round(system.cpu)}%`} />
+      <LoadRow
+        label="RAM"
+        hint={`${gb(system.memory_used)} of ${gb(system.memory_total)} in use`}
+        fill={ram}
+        value={`${Math.round(ram * 100)}%`}
+      />
+      <LoadRow
+        label="Swap"
+        hint="Memory paged out to disk; active while it is growing"
+        fill={swap}
+        value={
+          <>
+            <span className={system.swapping ? "warn" : undefined}>{system.swapping ? "active" : "idle"}</span>
+            <span className="muted"> · {gb(system.swap_used)}</span>
+          </>
+        }
+      />
+      <LoadRow
+        label="Temp"
+        hint="macOS thermal pressure; above normal, the system slows down to cool"
+        fill={THERMAL_LEVEL[system.thermal]}
+        value={<span className={system.thermal === "serious" || system.thermal === "critical" ? "warn" : "muted"}>{system.thermal}</span>}
+      />
+    </section>
   );
 }
 

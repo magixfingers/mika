@@ -22,8 +22,21 @@ export interface Agent {
   processes: ProcNode[];
 }
 
+export type Thermal = "normal" | "fair" | "serious" | "critical" | "unknown";
+
+export interface SystemLoad {
+  cpu: number;
+  memory_used: number;
+  memory_total: number;
+  swap_used: number;
+  swap_total: number;
+  swapping: boolean;
+  thermal: Thermal;
+}
+
 export interface Snapshot {
   sampled_at_ms: number;
+  system: SystemLoad;
   agents: Agent[];
 }
 

@@ -394,6 +394,36 @@ h2,
   margin-top: 6px;
 }
 
+/* --- System load --- */
+
+.load {
+  gap: 8px;
+}
+
+.load-row {
+  display: grid;
+  grid-template-columns: 3.4em 1fr minmax(5.5em, auto);
+  align-items: center;
+  gap: 12px;
+}
+
+.load-label {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+
+.load-value {
+  text-align: right;
+}
+
+.warn {
+  color: var(--error);
+  font-weight: 500;
+}
+
 /* --- Sessions and agents --- */
 
 .session,
