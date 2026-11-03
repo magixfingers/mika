@@ -40,3 +40,11 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+# Dev builds parse gigabytes of agent logs at startup; unoptimized, that took
+# ~30 s. Optimize dependencies fully and Mika's own code lightly.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

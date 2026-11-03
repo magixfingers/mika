@@ -266,43 +266,8 @@ function App() {
   const tabPill = useSlidingPill(tabbarRef, '[aria-current="page"]', page);
   useEntrance(mainRef, ".totals, .panel", `${page}:${tokens !== null}`);
 
-  // Pop up once each time a session starts waiting for the user. The popup stays
-  // until the user dismisses or opens it, even if the session moves on.
-  const waitingIds = useRef(new Set<string>());
-  useEffect(() => {
-    const waiting = statuses
-      .filter((s) => s.state === "waiting" && tracked(s.agent))
-      .sort((a, b) => b.since_ms - a.since_ms);
-    const fresh = waiting.find((s) => !waitingIds.current.has(s.session_id));
-    if (fresh) {
-
-      invoke("show_alert", {
-        info: {
-          session_id: fresh.session_id,
-          agent: fresh.agent,
-          title: `${AGENT_LABELS[fresh.agent]} needs you`,
-          body: shortPath(fresh.cwd),
-          tool: fresh.tool,
-          host_app: hostFor(fresh),
-          since_ms: fresh.since_ms,
-        },
-      }).catch((err) => invoke("log_frontend", { message: `alert popup failed: ${err}` }));
-    }
-    waitingIds.current = new Set(waiting.map((s) => s.session_id));
-  }, [statuses]);
-
-  // Optionally, alert once each time a session finishes.
-  const doneIds = useRef(new Set<string>());
-  useEffect(() => {
-    const done = statuses.filter((s) => s.state === "done");
-    if (settings?.alert_on_done) {
-      for (const s of done) {
-        if (doneIds.current.has(s.session_id)) continue;
-        invoke("alert", { title: "Mika · an agent finished", body: `${AGENT_LABELS[s.agent]} in ${shortPath(s.cwd)} is done.` });
-      }
-    }
-    doneIds.current = new Set(done.map((s) => s.session_id));
-  }, [statuses, settings?.alert_on_done]);
+  // Alerts (the popup, its ringtone and "agent finished") fire from the Rust core
+  // when a hook arrives, so they work even while this window is hidden.
 
   const usage = useMemo(
     () => usageIn(tokens?.days ?? [], range, (model) => tracked(providerOf(model))),

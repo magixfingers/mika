@@ -15,7 +15,7 @@ use notify::{RecursiveMode, Watcher};
 
 use alert::{AlertInfo, AlertState};
 use claude_limits::ClaudeLimits;
-use sampler::{Sampler, Snapshot};
+use sampler::{AgentKind, Sampler, Snapshot};
 use settings::{Integration, Settings};
 use status::{AgentState, SessionStatus, Tracker};
 use tokens::{TokenScanner, TokenStats};
@@ -379,13 +379,83 @@ fn spawn_claude_limits(app: AppHandle) {
     });
 }
 
+/// Alerts when a session starts waiting for the user, or finishes if the user
+/// asked for that. Runs here rather than in the window, because macOS pauses
+/// a hidden window's page and its alerts would never fire.
+fn alert_on_change(app: &AppHandle, before: Option<AgentState>, now: &SessionStatus) {
+    if before == Some(now.state) {
+        return;
+    }
+    let settings = current_settings(app);
+    let tracked = match now.agent {
+        "codex" => settings.track_codex,
+        _ => settings.track_claude,
+    };
+    if !tracked {
+        return;
+    }
+    let label = if now.agent == "codex" { "Codex" } else { "Claude Code" };
+    let folder = short_path(now.cwd.as_deref());
+    match now.state {
+        AgentState::Waiting => {
+            let info = AlertInfo {
+                session_id: now.session_id.clone(),
+                agent: now.agent.to_string(),
+                title: format!("{label} needs you"),
+                body: folder,
+                tool: now.tool.clone(),
+                host_app: host_app_for(app, now),
+                since_ms: now.since_ms,
+            };
+            if let Err(err) = show_alert(app.clone(), info) {
+                eprintln!("mika: alert popup failed: {err}");
+            }
+        }
+        AgentState::Done if settings.alert_on_done => {
+            alert(app.clone(), "Mika · an agent finished".into(), format!("{label} in {folder} is done."));
+        }
+        _ => {}
+    }
+}
+
+/// The app running a session's agent, matched like the window does.
+fn host_app_for(app: &AppHandle, session: &SessionStatus) -> Option<String> {
+    let latest = app.state::<Latest>();
+    let snapshot = latest.0.lock().ok()?;
+    snapshot.as_ref()?.agents.iter().find_map(|a| {
+        let same = match a.kind {
+            AgentKind::Codex => session.agent == "codex",
+            AgentKind::Claude => session.agent == "claude" && a.cwd == session.cwd,
+        };
+        if same { a.host_app.clone() } else { None }
+    })
+}
+
+fn short_path(path: Option<&str>) -> String {
+    let Some(path) = path else { return "unknown folder".into() };
+    let home = std::env::var("HOME").unwrap_or_default();
+    if path == "/" || path.trim_end_matches('/') == home {
+        return "no project folder".into();
+    }
+    match path.strip_prefix(&home) {
+        Some(rest) if !home.is_empty() => format!("~{rest}"),
+        _ => path.to_string(),
+    }
+}
+
 fn spawn_hook_listener(app: AppHandle) {
     thread::spawn(move || {
         let result = status::serve(|event| {
-            if let Ok(mut tracker) = app.state::<Statuses>().0.lock() {
+            let id = event.session_id.clone();
+            let change = app.state::<Statuses>().0.lock().ok().map(|mut tracker| {
+                let before = tracker.get(&id).map(|s| s.state);
                 tracker.apply(event, status::now_ms());
-            }
+                (before, tracker.get(&id).cloned())
+            });
             publish_statuses(&app);
+            if let Some((before, Some(now))) = change {
+                alert_on_change(&app, before, &now);
+            }
         });
         if let Err(err) = result {
             eprintln!("mika: hook listener on {} unavailable: {err}", status::HOOK_ADDR);
