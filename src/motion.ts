@@ -1,9 +1,17 @@
-// GSAP-driven motion. Every effect is skipped when macOS "Reduce motion" is on.
+// GSAP-driven motion. Every effect is skipped when macOS "Reduce motion" is on
+// or motion is Off in settings; Subtle keeps only small, functional motion.
 
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import gsap from "gsap";
 
-const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** "off" when macOS Reduce motion is on or the user picked Off in settings. */
+export function motionLevel(): "full" | "subtle" | "off" {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return "off";
+  const chosen = document.documentElement.dataset.motion;
+  return chosen === "off" || chosen === "subtle" ? chosen : "full";
+}
+
+const reduceMotion = () => motionLevel() === "off";
 
 /** Counts a number up (or down) to `value` instead of jumping, writing the text directly. */
 export function useRollingNumber<T extends HTMLElement>(value: number, format: (n: number) => string) {
@@ -47,7 +55,12 @@ export function useSlidingPill(container: RefObject<HTMLElement | null>, active:
     const box = container.current;
     const target = box?.querySelector<HTMLElement>(active);
     const el = pill.current;
-    if (!box || !target || !el) return;
+    if (!box || !el) return;
+    // No active option (e.g. the tab bar while Settings is open): fade the pill out.
+    if (!target) {
+      gsap.to(el, { opacity: 0, duration: reduceMotion() ? 0 : 0.2 });
+      return;
+    }
     const place = (animate: boolean) => {
       const to = { x: target.offsetLeft, width: target.offsetWidth, opacity: 1 };
       if (!animate || reduceMotion()) gsap.set(el, to);
@@ -67,7 +80,7 @@ export function useSlidingPill(container: RefObject<HTMLElement | null>, active:
 export function useEntrance(scope: RefObject<HTMLElement | null>, selector: string, key: unknown) {
   useLayoutEffect(() => {
     const root = scope.current;
-    if (!root || reduceMotion()) return;
+    if (!root || motionLevel() !== "full") return;
     const targets = [...root.querySelectorAll<HTMLElement>(selector)].filter((el) => el.offsetParent !== null);
     if (targets.length === 0) return;
     const ctx = gsap.context(() => {

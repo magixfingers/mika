@@ -37,6 +37,9 @@ pub struct Agent {
     /// Resident memory in bytes, summed over the tree.
     pub memory: u64,
     pub uptime_secs: u64,
+    /// The app the agent runs inside (e.g. /Applications/ChatGPT.app or Terminal.app),
+    /// used to bring its session to the front.
+    pub host_app: Option<String>,
     pub processes: Vec<ProcNode>,
 }
 
@@ -183,6 +186,7 @@ fn merge_codex_siblings(agents: Vec<Agent>) -> Vec<Agent> {
                 let merged = &mut out[i];
                 if agent.memory > merged.memory {
                     merged.pid = agent.pid;
+                    merged.host_app = agent.host_app.clone();
                     merged.cwd = agent.cwd.clone();
                     merged.uptime_secs = agent.uptime_secs;
                 }
@@ -255,8 +259,33 @@ fn build_agent(
         cpu: processes.iter().map(|n| n.cpu).sum(),
         memory: processes.iter().map(|n| n.memory).sum(),
         uptime_secs: root_proc.run_time(),
+        host_app: host_app(sys, root),
         processes,
     })
+}
+
+/// The outermost `.app` bundle in an executable path, e.g.
+/// `/Applications/Claude.app/Contents/Helpers/x` → `/Applications/Claude.app`.
+fn app_bundle(exe: &std::path::Path) -> Option<String> {
+    let path = exe.to_str()?;
+    let end = path.find(".app/")?;
+    Some(path[..end + 4].to_string())
+}
+
+/// The highest ancestor process that belongs to an app: Terminal for a shell
+/// session, the ChatGPT app for Codex, the Claude app for its sessions.
+fn host_app(sys: &System, pid: Pid) -> Option<String> {
+    let mut found = None;
+    let mut current = sys.process(pid).and_then(|p| p.parent());
+    for _ in 0..32 {
+        let Some(id) = current else { break };
+        let Some(proc_) = sys.process(id) else { break };
+        if let Some(bundle) = proc_.exe().and_then(app_bundle) {
+            found = Some(bundle);
+        }
+        current = proc_.parent();
+    }
+    found
 }
 
 fn collect_tree(
@@ -344,6 +373,7 @@ mod merge_tests {
             cpu: 1.0,
             memory,
             uptime_secs: 0,
+            host_app: None,
             processes: vec![ProcNode {
                 pid,
                 ppid: Some(ppid),
@@ -354,6 +384,17 @@ mod merge_tests {
                 depth: 0,
             }],
         }
+    }
+
+    #[test]
+    fn finds_the_outermost_app_bundle() {
+        let p = |s: &str| app_bundle(std::path::Path::new(s));
+        assert_eq!(p("/Applications/Claude.app/Contents/Helpers/disclaimer").as_deref(), Some("/Applications/Claude.app"));
+        assert_eq!(
+            p("/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex").as_deref(),
+            Some("/Applications/ChatGPT.app")
+        );
+        assert_eq!(p("/bin/zsh"), None);
     }
 
     #[test]

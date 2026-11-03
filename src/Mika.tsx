@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
+import { motionLevel } from "./motion";
+import { useSettings } from "./settings";
 import type { AgentState } from "./types";
 import "./Mika.css";
 
@@ -165,12 +167,14 @@ const REST: Record<AgentState, [number, number]> = {
  */
 export function Mika({ state, size = 56 }: { state: AgentState; size?: number }) {
   const svg = useRef<SVGSVGElement>(null);
+  const motion = useSettings().settings?.motion;
   const happy = state === "done";
   const sleepy = state === "idle";
 
   useEffect(() => {
     const root = svg.current;
-    if (!root || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const level = motionLevel();
+    if (!root || level === "off") return;
     const q = <T extends Element>(sel: string) => root.querySelector<T>(sel)!;
     const parts: Parts = {
       body: q(".mika-body"),
@@ -182,7 +186,8 @@ export function Mika({ state, size = 56 }: { state: AgentState; size?: number })
       sparks: [...root.querySelectorAll<SVGPathElement>(".mika-spark")],
       zzz: q(".mika-zzz"),
     };
-    const clips = size < 30 ? CLIPS[state].slice(0, 1) : CLIPS[state];
+    // Small copies and Subtle motion stick to the first, gentlest clip.
+    const clips = size < 30 || level === "subtle" ? CLIPS[state].slice(0, 1) : CLIPS[state];
     const [restMin, restMax] = REST[state];
     let current: gsap.core.Timeline | null = null;
     let timer: gsap.core.Tween | null = null;
@@ -209,7 +214,7 @@ export function Mika({ state, size = 56 }: { state: AgentState; size?: number })
         opacity: 0,
       });
     };
-  }, [state, size]);
+  }, [state, size, motion]);
 
   return (
     <svg

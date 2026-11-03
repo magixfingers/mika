@@ -141,23 +141,26 @@ html.liquid .glass {
   overflow: hidden;
 }
 
-.pages[data-page="overview"] .page-agents,
-.pages[data-page="agents"] .page-overview {
+.page {
   display: none;
 }
 
+.pages[data-page="overview"] .page-overview,
+.pages[data-page="agents"] .page-agents,
+.pages[data-page="settings"] .page-settings {
+  display: flex;
+}
+
+/* Wide windows show Overview and Agents side by side; Settings takes the full width. */
 @media (min-width: 760px) {
-  .pages {
+  .pages:not([data-page="settings"]) {
     grid-template-columns: 1fr 1fr;
     gap: 16px;
   }
 
-  .pages .page {
-    display: flex !important;
-  }
-
-  .tabbar button {
-    display: none;
+  .pages:not([data-page="settings"]) .page-overview,
+  .pages:not([data-page="settings"]) .page-agents {
+    display: flex;
   }
 }
 
@@ -166,6 +169,50 @@ html.liquid .glass {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Settings gear: a round glass-free button; ink when Settings is open. */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4em;
+  height: 2.4em;
+  border: 1px solid var(--hairline);
+  border-radius: 9999px;
+  background: var(--elevated);
+  color: var(--body);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, transform 300ms ease;
+}
+
+.icon-button:hover {
+  color: var(--ink);
+}
+
+.icon-button[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.icon-button[aria-pressed="true"] svg {
+  transform: rotate(60deg);
+}
+
+.icon-button svg {
+  transition: transform 300ms ease;
+}
+
+.icon-button:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
 }
 
 .mika-slot {
@@ -179,6 +226,20 @@ html.liquid .glass {
 }
 
 /* An agent is waiting for input: the status line turns red and pulses. */
+.app-title[data-clickable] {
+  cursor: pointer;
+}
+
+.app-title[data-clickable] .status-line::after {
+  content: " ›";
+}
+
+.app-title[data-clickable]:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
 .app-title[data-alert] .status-line {
   color: var(--error);
   font-weight: 500;
@@ -699,4 +760,191 @@ h2,
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
+}
+
+/* --- Settings --- */
+
+.page-settings {
+  overflow-y: auto;
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.settings-section {
+  gap: 0;
+}
+
+.settings-section h2 {
+  margin-bottom: 4px;
+}
+
+.setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.settings-section h2 + .setting {
+  border-top: 0;
+}
+
+.setting-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.setting-label {
+  font-weight: 500;
+}
+
+.setting-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+/* Switch: grey track, ink when on. */
+.toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border: 0;
+  border-radius: 9999px;
+  background: #d4d4d4;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 150ms ease;
+}
+
+.toggle[aria-checked="true"] {
+  background: var(--ink);
+}
+
+.toggle[aria-checked="true"]::after {
+  transform: translateX(16px);
+}
+
+/* Segmented choice: app control, 6px radius, selected option in ink. */
+.choice {
+  display: flex;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--elevated);
+}
+
+.choice button {
+  border: 0;
+  background: none;
+  height: 1.9em;
+  padding: 0 10px;
+  border-radius: 4px;
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--body);
+  cursor: pointer;
+}
+
+.choice button[aria-checked="true"] {
+  background: var(--ink);
+  color: #fff;
+}
+
+.button,
+.select,
+.time {
+  height: 2em;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--elevated);
+  font: inherit;
+  font-size: 0.86rem;
+  color: var(--ink);
+}
+
+.button {
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.button.primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.button:focus-visible,
+.choice button:focus-visible,
+.toggle:focus-visible,
+.select:focus-visible,
+.time:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+/* Motion set to Off in settings: stop CSS transitions as well as GSAP. */
+html[data-motion="off"] * {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* --- Scrollbars: 4px, invisible until the user is active (see scrollbars.ts) --- */
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+  background: transparent;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: transparent;
+}
+
+html.scroll-active ::-webkit-scrollbar-thumb {
+  background: rgba(23, 23, 23, 0.22);
+}
+
+html.scroll-active ::-webkit-scrollbar-thumb:hover {
+  background: rgba(23, 23, 23, 0.4);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }

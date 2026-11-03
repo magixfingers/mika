@@ -29,6 +29,8 @@ pub enum AgentState {
 #[derive(Debug, Clone, Serialize)]
 pub struct SessionStatus {
     pub session_id: String,
+    /// Which agent reported it: "claude" or "codex".
+    pub agent: &'static str,
     pub cwd: Option<String>,
     pub state: AgentState,
     /// The tool being run while `state` is working.
@@ -39,10 +41,17 @@ pub struct SessionStatus {
 /// The fields Mika uses from a Claude Code hook payload.
 #[derive(Debug, Deserialize)]
 pub struct HookEvent {
+    /// Set from the URL the hook posted to, not the payload.
+    #[serde(skip, default = "default_agent")]
+    pub agent: &'static str,
     pub session_id: String,
     pub hook_event_name: String,
     pub cwd: Option<String>,
     pub tool_name: Option<String>,
+}
+
+fn default_agent() -> &'static str {
+    "claude"
 }
 
 #[derive(Default)]
@@ -54,9 +63,11 @@ impl Tracker {
     pub fn apply(&mut self, event: HookEvent, now_ms: u64) {
         let (state, tool) = match event.hook_event_name.as_str() {
             "SessionStart" => (AgentState::Idle, None),
-            "UserPromptSubmit" | "PostToolUse" => (AgentState::Thinking, None),
+            "UserPromptSubmit" | "PostToolUse" | "PostToolUseFailure" => (AgentState::Thinking, None),
             "PreToolUse" => (AgentState::Working, event.tool_name),
-            "Notification" => (AgentState::Waiting, None),
+            // Claude Code asks via Notification; Codex has a dedicated PermissionRequest.
+            // Keep the tool name: for an approval request it says what needs approving.
+            "Notification" | "PermissionRequest" => (AgentState::Waiting, event.tool_name),
             "Stop" => (AgentState::Done, None),
             "SessionEnd" => {
                 self.sessions.remove(&event.session_id);
@@ -69,6 +80,7 @@ impl Tracker {
             .entry(event.session_id.clone())
             .or_insert_with(|| SessionStatus {
                 session_id: event.session_id,
+                agent: event.agent,
                 cwd: None,
                 state,
                 tool: None,
@@ -113,16 +125,23 @@ pub fn now_ms() -> u64 {
 }
 
 /// Serves hook posts until the process exits, calling `on_event` for each valid one.
+/// Claude Code posts to `/hook` and Codex to `/hook/codex`; both send the same fields.
 pub fn serve(on_event: impl Fn(HookEvent)) -> std::io::Result<()> {
     let server = tiny_http::Server::http(HOOK_ADDR).map_err(std::io::Error::other)?;
     for mut request in server.incoming_requests() {
-        let status = if request.method() != &tiny_http::Method::Post || request.url() != "/hook" {
+        let agent = match request.url() {
+            "/hook" => Some("claude"),
+            "/hook/codex" => Some("codex"),
+            _ => None,
+        };
+        let status = if request.method() != &tiny_http::Method::Post || agent.is_none() {
             404
         } else {
             let mut body = Vec::new();
             match request.as_reader().take(MAX_BODY).read_to_end(&mut body) {
                 Ok(_) => match serde_json::from_slice::<HookEvent>(&body) {
-                    Ok(event) => {
+                    Ok(mut event) => {
+                        event.agent = agent.unwrap_or("claude");
                         on_event(event);
                         204
                     }
@@ -142,6 +161,7 @@ mod tests {
 
     fn event(name: &str, tool: Option<&str>) -> HookEvent {
         HookEvent {
+            agent: "claude",
             session_id: "s1".into(),
             hook_event_name: name.into(),
             cwd: Some("/tmp/project".into()),
@@ -172,14 +192,25 @@ mod tests {
     }
 
     #[test]
+    fn codex_permission_request_needs_you() {
+        let mut t = Tracker::default();
+        let mut e = event("PermissionRequest", None);
+        e.agent = "codex";
+        t.apply(e, 0);
+        let s = &t.snapshot(0)[0];
+        assert_eq!(s.state, AgentState::Waiting);
+        assert_eq!(s.agent, "codex");
+    }
+
+    #[test]
     fn drops_stale_sessions_and_ranks_urgency() {
         let mut t = Tracker::default();
         t.apply(event("PreToolUse", Some("Read")), 0);
         assert!(t.snapshot(STALE_MS).is_empty());
 
         let sessions = vec![
-            SessionStatus { session_id: "a".into(), cwd: None, state: AgentState::Working, tool: None, since_ms: 0 },
-            SessionStatus { session_id: "b".into(), cwd: None, state: AgentState::Waiting, tool: None, since_ms: 0 },
+            SessionStatus { session_id: "a".into(), agent: "claude", cwd: None, state: AgentState::Working, tool: None, since_ms: 0 },
+            SessionStatus { session_id: "b".into(), agent: "codex", cwd: None, state: AgentState::Waiting, tool: None, since_ms: 0 },
         ];
         assert_eq!(overall(&sessions), Some(AgentState::Waiting));
         assert_eq!(overall(&[]), None);

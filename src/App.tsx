@@ -5,10 +5,12 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import type { Agent, AgentState, ClaudeLimits, SessionStatus, Snapshot, TokenStats } from "./types";
 import { Mika, STATE_LABELS } from "./Mika";
-import { Activity, Limits, Models, ProviderMark, RangePicker, Sessions, SystemPanel, Totals, usageIn, type Range } from "./Usage";
+import { Activity, Limits, Models, ProviderMark, providerOf, RangePicker, Sessions, SystemPanel, Totals, usageIn, type Range } from "./Usage";
 import { compact, formatBytes, formatUptime, shortPath } from "./format";
 import { startLiquidGlass } from "./liquid";
 import { useEntrance, usePop, useShake, useSlidingPill } from "./motion";
+import { useSettings } from "./settings";
+import { SettingsPage } from "./SettingsPage";
 import "./App.css";
 
 // 5 minutes of history at the 1-second sample interval.
@@ -35,8 +37,8 @@ function isBusy(history: number[] | undefined): boolean {
 }
 
 /** A working status inferred from activity; `tool` carries what was busy. */
-function inferredWorking(id: string, cwd: string | null, what: string): SessionStatus {
-  return { session_id: id, cwd, state: "working", tool: what, since_ms: 0 };
+function inferredWorking(id: string, agent: Agent["kind"], cwd: string | null, what: string): SessionStatus {
+  return { session_id: id, agent, cwd, state: "working", tool: what, since_ms: 0 };
 }
 
 function describe(status: SessionStatus): string {
@@ -118,7 +120,19 @@ function AgentRow({ agent, history, status }: { agent: Agent; history: number[];
   );
 }
 
-type Page = "overview" | "agents";
+/** Gear icon, adapted from Lucide's "settings" (ISC licence). */
+function GearIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+const appName = (path: string) => path.split("/").pop()?.replace(/\.app$/, "") ?? path;
+
+type Page = "overview" | "agents" | "settings";
 
 /**
  * Moves the window when the header or top strip is dragged. data-tauri-drag-region
@@ -126,7 +140,7 @@ type Page = "overview" | "agents";
  * character blocked dragging; this handles any press there except on controls.
  */
 function dragWindow(e: React.MouseEvent) {
-  if (e.button !== 0 || (e.target as HTMLElement).closest("button, a, input")) return;
+  if (e.button !== 0 || (e.target as HTMLElement).closest("button, a, input, [data-clickable]")) return;
   if (e.detail === 2) {
     getCurrentWindow().toggleMaximize();
     return;
@@ -138,12 +152,28 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const [page, setPage] = useState<Page>("overview");
+  // The page to return to when Settings is closed with the gear.
+  const lastPage = useRef<Exclude<Page, "settings">>("overview");
+  const showPage = (p: Exclude<Page, "settings">) => {
+    lastPage.current = p;
+    setPage(p);
+  };
+  const toggleSettings = () => setPage(page === "settings" ? lastPage.current : "settings");
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [history, setHistory] = useState<Record<number, number[]>>({});
   const [statuses, setStatuses] = useState<SessionStatus[]>([]);
   const [tokens, setTokens] = useState<TokenStats | null>(null);
   const [claudeLimits, setClaudeLimits] = useState<ClaudeLimits | null>(null);
   const [range, setRange] = useState<Range>("day");
+  const { settings } = useSettings();
+
+  // Open on the user's default range once settings arrive (later changes don't move the view).
+  const rangeChosen = useRef(false);
+  useEffect(() => {
+    if (!settings || rangeChosen.current) return;
+    rangeChosen.current = true;
+    setRange(settings.default_range);
+  }, [settings]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -194,22 +224,40 @@ function App() {
     };
   }, []);
 
-  const agents = snapshot?.agents ?? [];
+  // Agents the user turned off in settings are left out everywhere.
+  const tracked = (provider: "claude" | "codex") =>
+    provider === "claude" ? settings?.track_claude !== false : settings?.track_codex !== false;
+  const agents = (snapshot?.agents ?? []).filter((a) => tracked(a.kind));
   // Hooks report a session's folder, so an agent shows the most urgent session in its folder.
   // Hook states win when they report activity; otherwise CPU use marks the agent as working.
   const statusFor = (agent: Agent): SessionStatus | null => {
-    const hook = agent.kind === "claude" ? mostUrgent(statuses.filter((s) => s.cwd === agent.cwd)) : null;
+    // Claude runs one process per session, matched by folder; the ChatGPT app's single
+    // Codex agent hosts every Codex thread, so it shows the most urgent of them.
+    const hook = mostUrgent(
+      statuses.filter((s) => s.agent === agent.kind && (agent.kind === "codex" || s.cwd === agent.cwd)),
+    );
     if (hook && hook.state !== "idle" && hook.state !== "done") return hook;
-    if (isBusy(history[agent.pid])) return inferredWorking(`pid:${agent.pid}`, agent.cwd, AGENT_LABELS[agent.kind]);
+    if (isBusy(history[agent.pid])) return inferredWorking(`pid:${agent.pid}`, agent.kind, agent.cwd, AGENT_LABELS[agent.kind]);
     return hook;
   };
+  // The app hosting a session: Codex threads all live in the ChatGPT app's one agent;
+  // Claude sessions are matched to their agent by folder.
+  const hostFor = (s: SessionStatus) =>
+    agents.find((a) => a.kind === s.agent && (s.agent === "codex" || a.cwd === s.cwd))?.host_app ?? null;
   const tokensFlowing = (tokens?.tokens_per_sec ?? 0) > 0;
   const overall = mostUrgent([
     ...statuses,
     ...agents.flatMap((a) => statusFor(a) ?? []),
-    ...(tokensFlowing ? [inferredWorking("tokens", null, "tokens flowing")] : []),
+    ...(tokensFlowing ? [inferredWorking("tokens", "claude", null, "tokens flowing")] : []),
   ]);
   const alerting = overall?.state === "waiting";
+  // The app running the waiting session, so clicking the red header goes straight there.
+  const waitingHost = alerting && overall ? hostFor(overall) : null;
+  const openWaitingSession = () => {
+    if (!waitingHost) return;
+    invoke("focus_app", { path: waitingHost });
+    invoke("dismiss_alert");
+  };
 
   // Motion: Mika pops on state changes, the header shakes on alerts, panels rise in.
   const mikaRef = usePop<HTMLSpanElement>(overall?.state ?? "idle");
@@ -218,17 +266,48 @@ function App() {
   const tabPill = useSlidingPill(tabbarRef, '[aria-current="page"]', page);
   useEntrance(mainRef, ".totals, .panel", `${page}:${tokens !== null}`);
 
-  // Notify once each time a session starts waiting for the user.
+  // Pop up once each time a session starts waiting for the user. The popup stays
+  // until the user dismisses or opens it, even if the session moves on.
   const waitingIds = useRef(new Set<string>());
   useEffect(() => {
-    const waiting = statuses.filter((s) => s.state === "waiting");
-    for (const s of waiting) {
-      if (waitingIds.current.has(s.session_id)) continue;
-      invoke("alert", { title: "Mika · an agent needs you", body: `Claude Code in ${shortPath(s.cwd)} is waiting for your input.` });
+    const waiting = statuses
+      .filter((s) => s.state === "waiting" && tracked(s.agent))
+      .sort((a, b) => b.since_ms - a.since_ms);
+    const fresh = waiting.find((s) => !waitingIds.current.has(s.session_id));
+    if (fresh) {
+
+      invoke("show_alert", {
+        info: {
+          session_id: fresh.session_id,
+          agent: fresh.agent,
+          title: `${AGENT_LABELS[fresh.agent]} needs you`,
+          body: shortPath(fresh.cwd),
+          tool: fresh.tool,
+          host_app: hostFor(fresh),
+          since_ms: fresh.since_ms,
+        },
+      }).catch((err) => invoke("log_frontend", { message: `alert popup failed: ${err}` }));
     }
     waitingIds.current = new Set(waiting.map((s) => s.session_id));
   }, [statuses]);
-  const usage = useMemo(() => usageIn(tokens?.days ?? [], range), [tokens, range]);
+
+  // Optionally, alert once each time a session finishes.
+  const doneIds = useRef(new Set<string>());
+  useEffect(() => {
+    const done = statuses.filter((s) => s.state === "done");
+    if (settings?.alert_on_done) {
+      for (const s of done) {
+        if (doneIds.current.has(s.session_id)) continue;
+        invoke("alert", { title: "Mika · an agent finished", body: `${AGENT_LABELS[s.agent]} in ${shortPath(s.cwd)} is done.` });
+      }
+    }
+    doneIds.current = new Set(done.map((s) => s.session_id));
+  }, [statuses, settings?.alert_on_done]);
+
+  const usage = useMemo(
+    () => usageIn(tokens?.days ?? [], range, (model) => tracked(providerOf(model))),
+    [tokens, range, settings?.track_claude, settings?.track_codex],
+  );
 
   // On first load, grow the window so the whole overview shows without scrolling.
   const fitted = useRef(false);
@@ -253,7 +332,17 @@ function App() {
       <div className="drag-strip" onMouseDown={dragWindow} aria-hidden />
       <main className="app" ref={mainRef}>
         <header className="app-header" onMouseDown={dragWindow}>
-          <div className="app-title" data-alert={alerting || undefined} ref={titleRef}>
+          <div
+            className="app-title"
+            data-alert={alerting || undefined}
+            data-clickable={alerting && waitingHost ? "" : undefined}
+            ref={titleRef}
+            role={alerting && waitingHost ? "button" : undefined}
+            tabIndex={alerting && waitingHost ? 0 : undefined}
+            title={alerting && waitingHost ? `Open in ${appName(waitingHost)}` : undefined}
+            onClick={openWaitingSession}
+            onKeyDown={(e) => e.key === "Enter" && openWaitingSession()}
+          >
             <span className="mika-slot" ref={mikaRef}>
               <Mika state={overall?.state ?? "idle"} size={40} />
             </span>
@@ -268,7 +357,18 @@ function App() {
               </p>
             </div>
           </div>
-          <RangePicker value={range} onChange={setRange} />
+          <div className="header-controls">
+            <RangePicker value={range} onChange={setRange} />
+            <button
+              className="icon-button"
+              onClick={toggleSettings}
+              aria-label="Settings"
+              aria-pressed={page === "settings"}
+              title="Settings"
+            >
+              <GearIcon />
+            </button>
+          </div>
         </header>
 
         <div className="pages" data-page={page}>
@@ -279,7 +379,10 @@ function App() {
             ) : (
               <>
                 <Totals usage={usage} range={range} />
-                <Limits codex={tokens.codex_limit} claude={claudeLimits} />
+                <Limits
+                  codex={tracked("codex") ? tokens.codex_limit : null}
+                  claude={tracked("claude") && settings?.claude_limits !== false ? claudeLimits : null}
+                />
                 <Models usage={usage} />
                 <Activity days={tokens.days} />
               </>
@@ -303,14 +406,25 @@ function App() {
                 ))}
               </ul>
             </section>
-            {tokens && <Sessions key={range} sessions={tokens.sessions[range]} reviews={tokens.reviews[range]} statuses={statuses} />}
+            {tokens && (
+              <Sessions
+                key={range}
+                sessions={tokens.sessions[range].filter((s) => tracked(s.provider))}
+                reviews={tracked("codex") ? tokens.reviews[range] : null}
+                statuses={statuses}
+              />
+            )}
+          </div>
+
+          <div className="page page-settings">
+            <SettingsPage />
           </div>
         </div>
 
         <nav className="glass tabbar" aria-label="Pages" ref={tabbarRef}>
           <span className="pill" ref={tabPill} aria-hidden />
-          {(["overview", "agents"] as Page[]).map((p) => (
-            <button key={p} aria-current={page === p ? "page" : undefined} onClick={() => setPage(p)}>
+          {(["overview", "agents"] as const).map((p) => (
+            <button key={p} aria-current={page === p ? "page" : undefined} onClick={() => showPage(p)}>
               {p === "overview" ? "Overview" : `Agents${agents.length ? ` · ${agents.length}` : ""}`}
             </button>
           ))}

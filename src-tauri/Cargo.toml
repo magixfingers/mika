@@ -27,6 +27,7 @@ tiny_http = "0.12"
 chrono = "0.4"
 ureq = { version = "3", features = ["json"] }
 notify = "8"
+tauri-plugin-autostart = "2"
 
 
 [target.'cfg(target_os = "macos")'.dependencies]

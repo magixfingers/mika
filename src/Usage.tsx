@@ -3,6 +3,7 @@ import type { ClaudeLimits, DayUsage, ReviewSummary, SystemLoad, Thermal, ModelU
 import { Mika, STATE_LABELS } from "./Mika";
 import { CLAUDE_LOGO, OPENAI_LOGO } from "./logos";
 import { useRollingNumber, useSlidingPill } from "./motion";
+import { useSettings } from "./settings";
 import { compact, formatCost, localDate, timeUntil } from "./format";
 
 export type Range = "day" | "month" | "total";
@@ -14,13 +15,19 @@ export function providerOf(model: string): Provider {
 }
 
 /** Per-model usage summed over the days in `range`. */
-export function usageIn(days: DayUsage[], range: Range, now = new Date()): Map<string, ModelUsage> {
+export function usageIn(
+  days: DayUsage[],
+  range: Range,
+  include: (model: string) => boolean = () => true,
+  now = new Date(),
+): Map<string, ModelUsage> {
   const today = localDate(now);
   const inRange = (date: string) =>
     range === "total" || (range === "day" ? date === today : date.slice(0, 7) === today.slice(0, 7));
   const out = new Map<string, ModelUsage>();
   for (const day of days.filter((d) => inRange(d.date))) {
     for (const [model, u] of Object.entries(day.models)) {
+      if (!include(model)) continue;
       const sum = out.get(model) ?? { tokens: 0, cost: 0 };
       out.set(model, { tokens: sum.tokens + u.tokens, cost: sum.cost + u.cost });
     }
@@ -98,6 +105,7 @@ export function Totals({ usage, range }: { usage: Map<string, ModelUsage>; range
   const tokens = [...usage.values()].reduce((s, u) => s + u.tokens, 0);
   const cost = [...usage.values()].reduce((s, u) => s + u.cost, 0);
   const rolling = useRollingNumber<HTMLSpanElement>(tokens, formatCount);
+  const showCost = useSettings().settings?.show_cost !== false;
   return (
     <section className="totals">
       <p className="eyebrow">{RANGE_LABELS[range]}</p>
@@ -106,9 +114,11 @@ export function Totals({ usage, range }: { usage: Map<string, ModelUsage>; range
         <span ref={rolling} />
         <span className="total-compact">≈ {compact(tokens)}</span>
       </p>
-      <p className="total-cost" title="Estimated from public API list prices">
-        {formatCost(cost)} <span className="muted">est.</span>
-      </p>
+      {showCost && (
+        <p className="total-cost" title="Estimated from public API list prices">
+          {formatCost(cost)} <span className="muted">est.</span>
+        </p>
+      )}
     </section>
   );
 }
@@ -223,6 +233,7 @@ function clock(ms: number): string {
 }
 
 function SessionRow({ s, live, max }: { s: SessionUsage; live?: SessionStatus; max: number }) {
+  const showCost = useSettings().settings?.show_cost !== false;
   const model = s.models.length === 1 ? s.models[0].replace(/-\d{8}$/, "") : `${s.models.length} models`;
   const untitled = !s.title;
   const title = s.title ?? `${PROVIDER_LABELS[s.provider]} · ${model}`;
@@ -252,7 +263,7 @@ function SessionRow({ s, live, max }: { s: SessionUsage; live?: SessionStatus; m
               .filter(Boolean)
               .join(" · ")}
           </span>
-          <span className="muted num">{formatCost(s.cost)}</span>
+          {showCost && <span className="muted num">{formatCost(s.cost)}</span>}
         </div>
         <div className="row small">
           <span className="muted session-meta">{untitled ? s.id : activity.join(" · ")}</span>
@@ -276,6 +287,7 @@ function SessionRow({ s, live, max }: { s: SessionUsage; live?: SessionStatus; m
 }
 
 function ReviewRow({ r, max }: { r: ReviewSummary; max: number }) {
+  const showCost = useSettings().settings?.show_cost !== false;
   return (
     <li className="session">
       <span className="lead">
@@ -290,7 +302,7 @@ function ReviewRow({ r, max }: { r: ReviewSummary; max: number }) {
           <span className="muted session-meta">
             Latest {clock(r.latest_ms)} · {compact(r.latest_tokens)}
           </span>
-          <span className="muted num">{formatCost(r.cost)}</span>
+          {showCost && <span className="muted num">{formatCost(r.cost)}</span>}
         </div>
         <div className="row small">
           <span className="muted session-meta">
@@ -374,7 +386,7 @@ export function Sessions({
               key={`${row.s.provider}:${row.s.id}`}
               s={row.s}
               max={max}
-              live={row.s.provider === "claude" ? statuses.find((st) => st.session_id === row.s.id) : undefined}
+              live={statuses.find((st) => st.agent === row.s.provider && st.session_id === row.s.id)}
             />
           ),
         )}
