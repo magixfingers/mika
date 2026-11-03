@@ -1,152 +1,131 @@
 # Mika
 
-A macOS menu bar companion for AI coding agents. Mika shows what Claude Code and Codex are doing right now, how many tokens and how much of your plan they're using, what they cost your machine, and tells you, with a sound, when one of them needs you.
+**Your AI coding agents, at a glance.**
 
-Everything runs locally. Mika reads the agents' own log files and process list on your Mac; the only network request it makes is the one Claude Code itself makes to check your plan limits.
+Mika is a small companion that lives in your Mac's menu bar and keeps an eye on Claude Code and Codex for you. It shows what every agent is doing, how many tokens they're using, how close you are to your plan limits, and how hard your Mac is working. When an agent needs you, Mika lets you know with a sound.
 
-Built with Tauri 2 (Rust) and React + TypeScript.
+---
 
-## Features
+## Why Mika
 
-### Mika, the status character
+Running several AI agents at once is powerful, and hard to keep track of. You start a task in Claude Code, another in Codex, switch to something else, and then:
 
-A small ghost in the header that reflects the most urgent thing any agent is doing. Each state has its own color and a set of animations that play in random order, so it never loops the same move.
+- an agent has been waiting for your approval for ten minutes,
+- you've burned through most of your weekly limit without noticing,
+- your fans spin up and you're not sure which agent is to blame.
 
-| State | Color | Animations |
-| --- | --- | --- |
-| Working | Blue | hop, typing, spin, dash, spark burst |
-| Thinking | Blue | thought dots, eye scan, head tilt with "?", float |
-| Needs you | Red | wiggle, jump with "!", radar ring, knock-knock |
-| Done | Cyan | celebrate, happy nod |
-| Idle | Grey | breathe, blink, doze |
+Mika answers all three without you switching windows.
 
-Where the state comes from:
+---
 
-- **Claude Code hooks** report thinking, the tool in use, waiting for input, and done, the moment they happen (see [Agent status hooks](#agent-status-hooks)).
-- **Activity** covers everything else: an agent averaging 5% CPU or more, or tokens flowing in the last minute, counts as working. This is how Codex, and Claude sessions started before the hooks were installed, still show as busy.
+## Meet Mika
 
-### Alerts
+Mika is a little ghost that shows the mood of your agents at a glance.
 
-When a Claude Code session starts waiting for your input or approval, Mika:
+- **Thinking:** gazes off with thought bubbles, tilts its head, scans around.
+- **Working:** hops, types away, spins, dashes about.
+- **Needs you:** turns red, waves an "!", pings like radar, knocks to get your attention.
+- **Done:** celebrates with a burst of sparkles.
+- **Idle:** breathes slowly, blinks, dozes off.
 
-- plays the macOS "Glass" sound,
-- bounces its Dock icon,
-- turns the status line red ("Needs you · ~/project") and shakes the header,
-- and shows a notification where macOS allows it.
+Each mood has its own set of animations, played in a different order every time, so Mika always feels alive.
 
-It alerts once per wait, not on repeat.
+---
 
-### System load
+## Never miss a "needs you" moment
 
-CPU, RAM, swap and thermal state for the whole Mac, updated every second.
+When an agent stops to ask a question or needs your approval, Mika:
 
-- **CPU:** average across all cores (matches `top`).
-- **RAM:** memory in use, the same figure as Activity Monitor's "Memory Used".
-- **Swap:** amount swapped, marked *active* while it's growing.
-- **Temp:** macOS thermal pressure (normal, fair, serious, critical).
+- 🔔 plays a sound,
+- bounces in your Dock,
+- turns its status red and shows *which* project is waiting.
 
-### Tokens and cost
+Once per request, never nagging.
 
-Read from Claude Code (`~/.claude/projects`) and Codex (`~/.codex/sessions`) logs, for **today**, **this month** or **all time**:
+---
 
-- **Total tokens** with an estimated cost from public API list prices. The number rolls up live as tokens arrive.
-- **Tokens per second** over the last minute.
-- **Models:** tokens and share per model.
-- **Activity:** a year-to-date heatmap of daily usage.
-- **Trend:** daily totals over the last 88 days, with the peak.
+## Know exactly where your tokens go
 
-Updates are near real time: Mika is notified by macOS when a log file changes and reads only the new lines, typically within half a second. Codex usage is counted from its running totals, so a skipped usage event can't lose tokens.
+- **Today, this month, or all time:** one tap switches the view.
+- **A live token counter** that rolls up as your agents work, with an estimated cost.
+- **Tokens per second**, so you can feel how busy things are.
+- **Per-model breakdown:** see how much went to Opus, GPT, Haiku and the rest.
+- **Activity heatmap and trend:** spot your busiest days and spikes at a glance.
 
-### Plan limits
+Mika reads usage straight from your agents' own logs and updates within about half a second.
 
-- **Codex:** weekly limit, % left and reset time, read from Codex's logs.
-- **Claude:** every plan limit Anthropic reports (e.g. weekly, and per-model weeklies) with % left and reset time, plus your plan (e.g. Max 20x). Mika reads Claude Code's sign-in from the macOS Keychain and asks Anthropic's usage service every 5 minutes, waiting 15 minutes after an error. The token stays in memory and is never stored or logged. macOS asks once for permission. The service isn't publicly documented, so this can break if Anthropic changes it.
+---
 
-### Sessions
+## Stay ahead of your plan limits
 
-Every session in the selected range, most recent first, paginated to fit the window:
+See how much of your **Claude** and **Codex** plans you have left, and exactly when each limit resets, side by side. No more surprises halfway through a big task.
 
-- title (or `Claude Code · model` and the session ID when untitled), exact tokens and estimated cost,
-- app, model, effort and subagents active in the range,
-- time of the last call, number of calls and cache hit rate,
-- for Codex, how full the context window is; for Claude, the time left on its prompt cache,
-- a bar sized against the busiest session.
+---
 
-Codex's automatic review runs are grouped into one **Codex Auto Review** row. A session that's reporting live status shows a small Mika in place of its logo.
+## Every session, in detail
 
-### Running agents
+Each session shows its title, model, effort level, subagents, number of calls, cache hit rate, token count and estimated cost, plus how full its context is and how long its prompt cache will last. Sessions that are live right now show a tiny animated Mika. Long lists are split into pages that fit your window.
 
-Each running Claude Code or Codex agent with live CPU, memory, a CPU sparkline and its status. Click one to see its full process tree. The ChatGPT app's Codex processes are grouped into one agent.
+---
 
-### Menu bar and window
+## Your Mac's health, too
 
-- The menu bar title shows the agent count, CPU and memory (e.g. `● 2 agents · 4% · 1.7 GB`), with a symbol for the most urgent state.
-- Click it to show or hide the window; closing the window keeps Mika running.
-- The window opens at 9:16 and grows to fit the Overview on first launch. Drag it by the top area; double-click there to maximize.
-- Narrow windows switch between **Overview** and **Agents** pages; windows 760 px or wider show both side by side.
+Live **CPU**, **memory**, **swap** and **temperature** for the whole machine, plus CPU and memory for each running agent and every process it started. When your Mac slows down, you'll see why.
 
-### Design
+---
 
-Light Vercel Geist styling (Geist Sans and Mono, ink on #fafafa, hairline cards), with liquid glass from [liquid-dom](https://github.com/AndrewPrifer/liquid-dom) on the range switch and tab bar, and GSAP motion (rolling numbers, sliding selectors, staggered entrances). All motion turns off when macOS "Reduce motion" is on.
+## Designed to stay out of the way
 
-## Agent status hooks
+- Lives in the menu bar. Click to open, click to hide.
+- A clean, light look with smooth, subtle motion and glass controls.
+- Opens tall and narrow, and adapts to any window size.
+- Respects macOS "Reduce motion".
 
-Mika learns what each Claude Code session is doing from [hooks](https://docs.claude.com/en/docs/claude-code/hooks). Each hook posts its JSON input to Mika's listener on `127.0.0.1:47321`, which never leaves your machine. When Mika isn't running, the hook gives up after 1 second and does nothing.
+---
 
-To enable it, merge the `hooks` block from [`hooks/claude-code-settings.json`](hooks/claude-code-settings.json) into `~/.claude/settings.json`. Sessions started after that report their status.
+## Private by design
 
-| Hook event | State |
-| --- | --- |
-| `SessionStart` | Idle |
-| `UserPromptSubmit`, `PostToolUse` | Thinking |
-| `PreToolUse` | Working (shows the tool name) |
-| `Notification` | Needs you (with alert) |
-| `Stop` | Done, then idle after 30 seconds |
-| `SessionEnd` | Removed |
+Mika runs entirely on your Mac. It reads your agents' local logs and process list, and never uploads your code, prompts or usage anywhere. The only thing it asks the internet for is your Claude plan limits, using the same sign-in Claude Code already uses.
 
-Codex has no equivalent hooks, so Codex shows as working or idle from its activity, and can't trigger "Needs you".
+---
 
-## Limitations
+## Works with
 
-- macOS only.
-- Costs are estimates from public list prices; prices for some models are guesses.
-- Claude Code logs don't record the context window size or response timings, so there is no context bar for Claude sessions and no per-session tok/s.
-- Codex's compressed archived sessions (`.jsonl.zst`) aren't read yet, so all-time totals can be lower than other tools.
+| | Live status | Tokens and cost | Plan limits | Resources |
+| --- | --- | --- | --- | --- |
+| **Claude Code** | ✓ thinking, tools, needs you, done | ✓ | ✓ | ✓ |
+| **Codex** (CLI and ChatGPT app) | ✓ working or idle | ✓ | ✓ | ✓ |
 
-## Development
+macOS only, for now.
 
-Prerequisites: [Rust](https://www.rust-lang.org/tools/install), Node 20+, Xcode Command Line Tools.
+---
+
+## Getting started
+
+1. Install and open Mika. It appears in your menu bar.
+2. **For live Claude Code status and alerts**, add Mika's hooks: merge the `hooks` block from [`hooks/claude-code-settings.json`](hooks/claude-code-settings.json) into `~/.claude/settings.json`. New Claude Code sessions will then report to Mika.
+3. The first time Mika shows your Claude limits, macOS asks to allow access to Claude Code's sign-in. Allow it to see them.
+
+That's it. Start an agent and watch Mika come to life.
+
+---
+
+## Good to know
+
+- Costs are estimates based on public API prices, not your actual bill.
+- Claude Code doesn't record its context size, so the context bar appears for Codex sessions only.
+- Codex can't tell Mika when it's waiting for you, so "needs you" alerts come from Claude Code.
+- Claude limits come from a service Anthropic hasn't documented publicly and may change.
+
+---
+
+## For developers
+
+Mika is built with Tauri 2 (Rust) and React + TypeScript.
 
 ```bash
 npm install
 npm run tauri dev
 ```
 
-Tests:
-
-```bash
-cd src-tauri && cargo test
-```
-
-Checks against your own data (ignored by default):
-
-```bash
-cd src-tauri && cargo test --release -- --ignored --nocapture
-```
-
-These print parsed sessions, per-provider totals and system load, for comparison with Token Monitor or macOS tools.
-
-### Layout
-
-| Path | What it does |
-| --- | --- |
-| `src-tauri/src/sampler.rs` | Process tree, per-agent CPU and memory, system load |
-| `src-tauri/src/status.rs` | Hook listener and per-session state machine |
-| `src-tauri/src/tokens.rs` | Incremental log parsing: tokens, cost, sessions, limits |
-| `src-tauri/src/claude_limits.rs` | Claude plan limits from Anthropic's usage service |
-| `src-tauri/src/lib.rs` | Tray, threads, file watching, alerts, commands |
-| `src/App.tsx` | Layout, pages, status logic, alerts |
-| `src/Usage.tsx` | Totals, limits, models, sessions, activity, trend, system panel |
-| `src/Mika.tsx` | The character and its animation library |
-| `src/motion.ts` | GSAP helpers |
-| `src/liquid.ts` | liquid-dom WebGPU glass |
+Run the tests with `cd src-tauri && cargo test`.
