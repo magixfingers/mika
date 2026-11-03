@@ -73,12 +73,7 @@ p {
   position: fixed;
   inset: 0;
   z-index: -1;
-  background:
-    radial-gradient(30% 22% at 18% 16%, rgba(0, 124, 240, 0.28), transparent 70%),
-    radial-gradient(28% 20% at 50% 10%, rgba(80, 227, 194, 0.3), transparent 70%),
-    radial-gradient(30% 22% at 82% 18%, rgba(255, 0, 128, 0.22), transparent 70%),
-    radial-gradient(26% 18% at 64% 30%, rgba(249, 203, 40, 0.22), transparent 70%),
-    var(--canvas);
+  background: var(--canvas);
 }
 
 html.liquid .backdrop {

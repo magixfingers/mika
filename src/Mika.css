@@ -33,8 +33,19 @@
   stroke-linecap: round;
 }
 
+.mika-prop {
+  opacity: 0;
+}
+
 .mika-dots circle {
   fill: var(--muted);
+}
+
+.mika-question,
+.mika-zzz {
+  fill: var(--muted);
+  font-weight: 700;
+  font-size: 14px;
 }
 
 .mika-alert {
@@ -43,99 +54,12 @@
   font-size: 18px;
 }
 
-.mika-body {
-  transform-box: fill-box;
-  transform-origin: 50% 100%;
+.mika-ring {
+  fill: none;
+  stroke: var(--mika-color);
+  stroke-width: 2;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .mika-idle .mika-body {
-    animation: mika-breathe 4s ease-in-out infinite;
-  }
-
-  .mika-thinking .mika-eyes {
-    animation: mika-glance 2.4s ease-in-out infinite;
-  }
-
-  .mika-thinking .mika-dots circle {
-    animation: mika-blink-dot 1.2s ease-in-out infinite;
-  }
-
-  .mika-thinking .mika-dots circle:nth-child(2) {
-    animation-delay: 0.2s;
-  }
-
-  .mika-thinking .mika-dots circle:nth-child(3) {
-    animation-delay: 0.4s;
-  }
-
-  .mika-working .mika-body {
-    animation: mika-hop 0.6s cubic-bezier(0.3, 0, 0.4, 1) infinite alternate;
-  }
-
-  .mika-waiting .mika-body {
-    animation: mika-wiggle 0.9s ease-in-out infinite;
-  }
-
-  .mika-done .mika-body {
-    animation: mika-pop 500ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
-  }
-}
-
-@keyframes mika-breathe {
-  50% {
-    transform: scale(1.03, 0.97);
-  }
-}
-
-@keyframes mika-glance {
-  0%,
-  100% {
-    transform: translate(0, 0);
-  }
-  30%,
-  60% {
-    transform: translate(2px, -2px);
-  }
-}
-
-@keyframes mika-blink-dot {
-  50% {
-    opacity: 0.25;
-  }
-}
-
-@keyframes mika-hop {
-  from {
-    transform: translateY(0) scale(1.04, 0.96);
-  }
-  to {
-    transform: translateY(-5px) scale(0.98, 1.02);
-  }
-}
-
-@keyframes mika-wiggle {
-  0%,
-  60%,
-  100% {
-    transform: rotate(0);
-  }
-  15% {
-    transform: rotate(-7deg);
-  }
-  30% {
-    transform: rotate(6deg);
-  }
-  45% {
-    transform: rotate(-3deg);
-  }
-}
-
-@keyframes mika-pop {
-  from {
-    transform: scale(0.85);
-  }
-  to {
-    transform: scale(1);
-  }
+.mika-spark {
+  fill: var(--mika-color);
 }

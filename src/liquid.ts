@@ -13,14 +13,13 @@ const MAX_DPR = 2;
 const ENERGY_EASE = 0.02;
 
 /**
- * Agent activity, 0..1, set by the app from tokens per second. The backdrop
- * flows faster and blooms brighter as it rises, so busy agents are visible
- * at a glance.
+ * Agent activity, 0..1, set by the app from tokens per second. The shimmer
+ * flows a little faster and deeper as it rises.
  */
 export const liquidActivity = { target: 0 };
 
-// The Vercel mesh (develop, preview and ship stops) as a domain-warped noise
-// field blooming around the totals, over the #fafafa canvas, with fine grain.
+// A white canvas (#fafafa) with a barely visible, colorless shimmer: a
+// domain-warped noise field of light and shade around the totals, plus grain.
 const BACKDROP_SHADER = /* wgsl */ `
 struct Uniforms {
   resolution: vec2f,
@@ -74,24 +73,14 @@ fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
   let warp = vec2f(fbm(p * 2.2 + vec2f(t, -t * 0.7)), fbm(p * 2.2 + vec2f(-t * 0.6, t) + 4.1));
   let q = p * 1.6 + (warp - 0.5) * (0.9 + 0.5 * u.energy);
 
-  let blue = vec3f(0.0, 0.486, 0.941);
-  let cyan = vec3f(0.314, 0.89, 0.761);
-  let violet = vec3f(0.475, 0.157, 0.792);
-  let pink = vec3f(1.0, 0.0, 0.502);
-  let amber = vec3f(0.976, 0.796, 0.157);
-
-  var col = mix(blue, cyan, smoothstep(0.25, 0.75, fbm(q + vec2f(0.0, t * 0.5))));
-  col = mix(col, violet, smoothstep(0.45, 0.85, fbm(q * 1.3 + 7.3)) * 0.8);
-  col = mix(col, pink, smoothstep(0.55, 0.9, fbm(q * 1.1 - 3.1 + t * 0.3)) * 0.75);
-  col = mix(col, amber, smoothstep(0.6, 0.95, fbm(q * 0.9 + 11.7)) * 0.6);
-
-  // Bloom around the hero, stronger while agents are busy.
+  // White stays white: only a faint, colorless shimmer of light and shade
+  // drifts around the totals, a little livelier while agents are busy.
+  let light = fbm(q + vec2f(0.0, t * 0.5)) - 0.5;
   let falloff = exp(-dot(p * vec2f(1.0, 1.6), p * vec2f(1.0, 1.6)) * 3.2);
-  let strength = falloff * (0.34 + 0.22 * u.energy);
-  var rgb = mix(vec3f(0.98), col, strength);
+  var rgb = vec3f(0.98 + light * falloff * (0.022 + 0.014 * u.energy));
 
-  // Fine film grain keeps the gradient from banding.
-  rgb += (hash(pos.xy + fract(t) * 91.0) - 0.5) * 0.018;
+  // Very fine grain keeps the surface from looking flat.
+  rgb += (hash(pos.xy + fract(t) * 91.0) - 0.5) * 0.006;
   return vec4f(rgb, 1.0);
 }
 `;
