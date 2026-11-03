@@ -226,9 +226,16 @@ fn tray_title(snapshot: &Snapshot, state: Option<AgentState>, style: &str) -> St
 
 fn toggle_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
-        if window.is_visible().unwrap_or(false) {
+        // Hide only when Mika is actually in front. A window that's open but
+        // behind other apps, minimized or on another Space still reports
+        // visible, and hiding it then made the user click twice.
+        let in_front = window.is_visible().unwrap_or(false)
+            && window.is_focused().unwrap_or(false)
+            && !window.is_minimized().unwrap_or(false);
+        if in_front {
             let _ = window.hide();
         } else {
+            let _ = window.unminimize();
             let _ = window.show();
             let _ = window.set_focus();
         }
