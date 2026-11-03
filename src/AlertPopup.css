@@ -1,37 +1,84 @@
-/* The "needs you" popup: a white card that fills its small window, with a red
-   accent rule so it reads as urgent without shouting. Tokens come from App.css. */
+/* The "needs you" popup in Mika's Geist style: #fafafa page, white hairline card,
+   mono eyebrow, pill buttons. Red appears only in the small label and Mika. */
 
 html,
-body {
+body,
+#root {
   height: 100%;
 }
 
 body {
-  background: var(--elevated);
+  background: var(--canvas);
   overflow: hidden;
 }
 
-#root {
+.alert-shell {
   height: 100%;
+  padding: 8px;
 }
 
 .alert-card {
   height: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 14px 16px 14px 18px;
-  border-left: 3px solid var(--error);
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--elevated);
   user-select: none;
   -webkit-user-select: none;
   cursor: default;
 }
 
+.alert-eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.alert-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--error);
+}
+
+.alert-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--error);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html:not([data-motion="off"]) .alert-dot {
+    animation: alert-dot 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes alert-dot {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.alert-time {
+  color: var(--mute);
+  font-variant-numeric: tabular-nums;
+}
+
 .alert-head {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
 }
 
 .alert-text {
@@ -49,39 +96,54 @@ body {
 }
 
 .alert-title {
-  font-size: 1.05rem;
+  font-size: 1.02rem;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   color: var(--ink);
 }
 
 .alert-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.86rem;
   color: var(--body);
 }
 
-.alert-meta {
+/* The tool waiting for approval, as a small mono chip. */
+.alert-tool {
+  padding: 1px 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--canvas);
   font-family: var(--mono);
-  font-size: 0.78rem;
-  color: var(--error);
+  font-size: 0.74rem;
+  color: var(--ink);
 }
 
 .alert-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
 }
 
+/* Pills, like the range switch and tab bar. */
 .alert-button {
-  height: 2.1em;
+  height: 2em;
   padding: 0 14px;
   border: 1px solid var(--hairline);
-  border-radius: 6px;
+  border-radius: 64px;
   background: var(--elevated);
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 0.86rem;
   font-weight: 500;
-  color: var(--ink);
+  color: var(--body);
   cursor: pointer;
+  transition: color 150ms ease, background 150ms ease;
+}
+
+.alert-button:hover {
+  color: var(--ink);
 }
 
 .alert-button.primary {

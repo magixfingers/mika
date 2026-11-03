@@ -8,7 +8,7 @@ import "./AlertPopup.css";
 
 function waitingFor(sinceMs: number, now: number): string {
   const s = Math.max(0, Math.floor((now - sinceMs) / 1000));
-  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
 }
 
 /** The "needs you" popup, rendered in its own small always-on-top window. */
@@ -37,28 +37,35 @@ export function AlertPopup() {
   const app = info.host_app?.split("/").pop()?.replace(/\.app$/, "");
 
   return (
-    <div className="alert-card" role="alertdialog" aria-labelledby="alert-title" aria-describedby="alert-body">
-      <div className="alert-head" data-tauri-drag-region>
-        <Mika state="waiting" size={44} />
-        <div className="alert-text" data-tauri-drag-region>
-          <p className="alert-title" id="alert-title">
-            {info.title}
-          </p>
-          <p className="alert-body" id="alert-body">
-            {info.body}
-          </p>
-          <p className="alert-meta">
-            {info.tool ? `${info.tool} · ` : ""}waiting {waitingFor(info.since_ms, now)}
-          </p>
+    <div className="alert-shell" data-tauri-drag-region>
+      <div className="alert-card" role="alertdialog" aria-labelledby="alert-title" aria-describedby="alert-body">
+        <div className="alert-eyebrow" data-tauri-drag-region>
+          <span className="alert-label">
+            <span className="alert-dot" aria-hidden />
+            Needs you
+          </span>
+          <span className="alert-time">{waitingFor(info.since_ms, now)}</span>
         </div>
-      </div>
-      <div className="alert-actions">
-        <button className="alert-button" onClick={() => invoke("dismiss_alert")}>
-          Dismiss
-        </button>
-        <button className="alert-button primary" onClick={() => invoke("open_alert_target")} autoFocus>
-          {app ? `Open in ${app}` : "Open session"}
-        </button>
+        <div className="alert-head" data-tauri-drag-region>
+          <Mika state="waiting" size={40} />
+          <div className="alert-text" data-tauri-drag-region>
+            <p className="alert-title" id="alert-title">
+              {info.title}
+            </p>
+            <p className="alert-body" id="alert-body">
+              {info.body}
+              {info.tool && <span className="alert-tool">{info.tool}</span>}
+            </p>
+          </div>
+        </div>
+        <div className="alert-actions">
+          <button className="alert-button" onClick={() => invoke("dismiss_alert")}>
+            Dismiss
+          </button>
+          <button className="alert-button primary" onClick={() => invoke("open_alert_target")}>
+            {app ? `Open in ${app}` : "Open session"}
+          </button>
+        </div>
       </div>
     </div>
   );
