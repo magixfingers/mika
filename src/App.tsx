@@ -7,7 +7,7 @@ import type { Agent, AgentState, ClaudeLimits, SessionStatus, Snapshot, TokenSta
 import { Mika, STATE_LABELS } from "./Mika";
 import { Activity, Limits, Models, ProviderMark, RangePicker, Sessions, SystemPanel, Totals, usageIn, type Range } from "./Usage";
 import { compact, formatBytes, formatUptime, shortPath } from "./format";
-import { liquidActivity, startLiquidGlass } from "./liquid";
+import { startLiquidGlass } from "./liquid";
 import { useEntrance, usePop, useShake, useSlidingPill } from "./motion";
 import "./App.css";
 
@@ -211,9 +211,7 @@ function App() {
   ]);
   const alerting = overall?.state === "waiting";
 
-  // Motion: the backdrop shader follows the token rate (~50K tok/s is full energy),
-  // Mika pops on state changes, the header shakes on alerts, panels rise in.
-  liquidActivity.target = Math.min(1, (tokens?.tokens_per_sec ?? 0) / 50_000);
+  // Motion: Mika pops on state changes, the header shakes on alerts, panels rise in.
   const mikaRef = usePop<HTMLSpanElement>(overall?.state ?? "idle");
   const titleRef = useShake<HTMLDivElement>(alerting);
   const tabbarRef = useRef<HTMLElement>(null);
