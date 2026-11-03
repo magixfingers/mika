@@ -55,7 +55,12 @@ export function useSlidingPill(container: RefObject<HTMLElement | null>, active:
     const box = container.current;
     const target = box?.querySelector<HTMLElement>(active);
     const el = pill.current;
-    if (!box || !target || !el) return;
+    if (!box || !el) return;
+    // No active option (e.g. the tab bar while Settings is open): fade the pill out.
+    if (!target) {
+      gsap.to(el, { opacity: 0, duration: reduceMotion() ? 0 : 0.2 });
+      return;
+    }
     const place = (animate: boolean) => {
       const to = { x: target.offsetLeft, width: target.offsetWidth, opacity: 1 };
       if (!animate || reduceMotion()) gsap.set(el, to);

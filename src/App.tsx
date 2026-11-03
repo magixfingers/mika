@@ -120,6 +120,16 @@ function AgentRow({ agent, history, status }: { agent: Agent; history: number[];
   );
 }
 
+/** Gear icon, adapted from Lucide's "settings" (ISC licence). */
+function GearIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
 type Page = "overview" | "agents" | "settings";
 
 /**
@@ -140,6 +150,13 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const [page, setPage] = useState<Page>("overview");
+  // The page to return to when Settings is closed with the gear.
+  const lastPage = useRef<Exclude<Page, "settings">>("overview");
+  const showPage = (p: Exclude<Page, "settings">) => {
+    lastPage.current = p;
+    setPage(p);
+  };
+  const toggleSettings = () => setPage(page === "settings" ? lastPage.current : "settings");
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [history, setHistory] = useState<Record<number, number[]>>({});
   const [statuses, setStatuses] = useState<SessionStatus[]>([]);
@@ -299,7 +316,18 @@ function App() {
               </p>
             </div>
           </div>
-          <RangePicker value={range} onChange={setRange} />
+          <div className="header-controls">
+            <RangePicker value={range} onChange={setRange} />
+            <button
+              className="icon-button"
+              onClick={toggleSettings}
+              aria-label="Settings"
+              aria-pressed={page === "settings"}
+              title="Settings"
+            >
+              <GearIcon />
+            </button>
+          </div>
         </header>
 
         <div className="pages" data-page={page}>
@@ -354,9 +382,9 @@ function App() {
 
         <nav className="glass tabbar" aria-label="Pages" ref={tabbarRef}>
           <span className="pill" ref={tabPill} aria-hidden />
-          {(["overview", "agents", "settings"] as Page[]).map((p) => (
-            <button key={p} aria-current={page === p ? "page" : undefined} onClick={() => setPage(p)}>
-              {p === "overview" ? "Overview" : p === "settings" ? "Settings" : `Agents${agents.length ? ` · ${agents.length}` : ""}`}
+          {(["overview", "agents"] as const).map((p) => (
+            <button key={p} aria-current={page === p ? "page" : undefined} onClick={() => showPage(p)}>
+              {p === "overview" ? "Overview" : `Agents${agents.length ? ` · ${agents.length}` : ""}`}
             </button>
           ))}
           <span className="rate">{compact(tokens?.tokens_per_sec ?? 0)} tok/s</span>

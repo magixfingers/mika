@@ -171,6 +171,50 @@ html.liquid .glass {
   gap: 12px;
 }
 
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Settings gear: a round glass-free button; ink when Settings is open. */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4em;
+  height: 2.4em;
+  border: 1px solid var(--hairline);
+  border-radius: 9999px;
+  background: var(--elevated);
+  color: var(--body);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, transform 300ms ease;
+}
+
+.icon-button:hover {
+  color: var(--ink);
+}
+
+.icon-button[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.icon-button[aria-pressed="true"] svg {
+  transform: rotate(60deg);
+}
+
+.icon-button svg {
+  transition: transform 300ms ease;
+}
+
+.icon-button:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
 .mika-slot {
   display: inline-flex;
 }
