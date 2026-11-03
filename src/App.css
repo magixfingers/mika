@@ -905,3 +905,32 @@ html[data-motion="off"] * {
   transition: none !important;
   animation: none !important;
 }
+
+/* --- Scrollbars: 4px, invisible until the user is active (see scrollbars.ts) --- */
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+  background: transparent;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: transparent;
+}
+
+html.scroll-active ::-webkit-scrollbar-thumb {
+  background: rgba(23, 23, 23, 0.22);
+}
+
+html.scroll-active ::-webkit-scrollbar-thumb:hover {
+  background: rgba(23, 23, 23, 0.4);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
