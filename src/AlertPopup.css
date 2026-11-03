@@ -1,0 +1,96 @@
+/* The "needs you" popup: a white card that fills its small window, with a red
+   accent rule so it reads as urgent without shouting. Tokens come from App.css. */
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--elevated);
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
+}
+
+.alert-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px 14px 18px;
+  border-left: 3px solid var(--error);
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+.alert-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.alert-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.alert-text p {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alert-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.alert-body {
+  color: var(--body);
+}
+
+.alert-meta {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--error);
+}
+
+.alert-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.alert-button {
+  height: 2.1em;
+  padding: 0 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--elevated);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.alert-button.primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.alert-button:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}

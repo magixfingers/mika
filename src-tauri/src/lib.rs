@@ -1,3 +1,4 @@
+mod alert;
 mod claude_limits;
 mod sampler;
 mod settings;
@@ -12,6 +13,7 @@ use std::time::{Duration, Instant};
 
 use notify::{RecursiveMode, Watcher};
 
+use alert::{AlertInfo, AlertState};
 use claude_limits::ClaudeLimits;
 use sampler::{Sampler, Snapshot};
 use settings::{Integration, Settings};
@@ -109,6 +111,39 @@ fn install_hooks(app: AppHandle, agent: Integration) -> Result<(), String> {
 fn remove_hooks(app: AppHandle, agent: Integration) -> Result<(), String> {
     let home = app.path().home_dir().map_err(|e| e.to_string())?;
     settings::update_hooks_file(agent, &home, settings::without_hooks)
+}
+
+/// Pops up the "needs you" window with a repeating ringtone. Falls back to a
+/// single chime when the user turned the popup off in settings.
+#[tauri::command]
+fn show_alert(app: AppHandle, info: AlertInfo) -> Result<(), String> {
+    let settings = current_settings(&app);
+    if !settings.alert_popup {
+        alert(app, info.title, info.body);
+        return Ok(());
+    }
+    let ring = (settings.sound_enabled && !settings.is_quiet_now()).then(|| settings.sound_path());
+    if settings.dock_bounce
+        && let Some(window) = app.get_webview_window("main")
+    {
+        let _ = window.request_user_attention(Some(tauri::UserAttentionType::Critical));
+    }
+    alert::show(&app, info, ring).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn dismiss_alert(app: AppHandle) {
+    alert::dismiss(&app);
+}
+
+#[tauri::command]
+fn open_alert_target(app: AppHandle) {
+    alert::open_target(&app);
+}
+
+#[tauri::command]
+fn current_alert(state: State<'_, AlertState>) -> Option<AlertInfo> {
+    state.current()
 }
 
 /// Gets the user's attention when an agent needs them: a sound that needs no
@@ -354,7 +389,8 @@ pub fn run() {
         .manage(Statuses::default())
         .manage(LatestTokens::default())
         .manage(LatestClaudeLimits::default())
-        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens, claude_limits, alert, log_frontend, get_settings, set_settings, preview_sound, hooks_status, install_hooks, remove_hooks])
+        .manage(AlertState::default())
+        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens, claude_limits, alert, log_frontend, get_settings, set_settings, preview_sound, hooks_status, install_hooks, remove_hooks, show_alert, dismiss_alert, open_alert_target, current_alert])
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "Show Mika", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Mika", true, None::<&str>)?;

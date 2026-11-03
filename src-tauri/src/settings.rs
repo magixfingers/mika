@@ -23,6 +23,8 @@ pub struct Settings {
     pub sound: String,
     pub dock_bounce: bool,
     pub alert_on_done: bool,
+    /// Pop up a window with a repeating ringtone when an agent needs you.
+    pub alert_popup: bool,
     pub quiet_hours: bool,
     /// Local time, `HH:MM`.
     pub quiet_start: String,
@@ -49,6 +51,7 @@ impl Default for Settings {
             sound: "Glass".into(),
             dock_bounce: true,
             alert_on_done: false,
+            alert_popup: true,
             quiet_hours: false,
             quiet_start: "22:00".into(),
             quiet_end: "08:00".into(),

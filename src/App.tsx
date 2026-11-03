@@ -253,13 +253,33 @@ function App() {
   const tabPill = useSlidingPill(tabbarRef, '[aria-current="page"]', page);
   useEntrance(mainRef, ".totals, .panel", `${page}:${tokens !== null}`);
 
-  // Notify once each time a session starts waiting for the user.
+  // Pop up once each time a session starts waiting for the user, and close the
+  // popup when nothing is waiting any more (e.g. answered in the agent's own app).
   const waitingIds = useRef(new Set<string>());
+  const alertedId = useRef<string | null>(null);
   useEffect(() => {
-    const waiting = statuses.filter((s) => s.state === "waiting");
-    for (const s of waiting) {
-      if (waitingIds.current.has(s.session_id)) continue;
-      invoke("alert", { title: "Mika · an agent needs you", body: `${AGENT_LABELS[s.agent]} in ${shortPath(s.cwd)} is waiting for your input.` });
+    const waiting = statuses
+      .filter((s) => s.state === "waiting" && tracked(s.agent))
+      .sort((a, b) => b.since_ms - a.since_ms);
+    const fresh = waiting.find((s) => !waitingIds.current.has(s.session_id));
+    if (fresh) {
+      // The app hosting this session: Codex threads all live in one ChatGPT app agent.
+      const host = agents.find((a) => a.kind === fresh.agent && (fresh.agent === "codex" || a.cwd === fresh.cwd));
+      invoke("show_alert", {
+        info: {
+          session_id: fresh.session_id,
+          agent: fresh.agent,
+          title: `${AGENT_LABELS[fresh.agent]} needs you`,
+          body: shortPath(fresh.cwd),
+          tool: fresh.tool,
+          host_app: host?.host_app ?? null,
+          since_ms: fresh.since_ms,
+        },
+      });
+      alertedId.current = fresh.session_id;
+    } else if (alertedId.current && !waiting.some((s) => s.session_id === alertedId.current)) {
+      invoke("dismiss_alert");
+      alertedId.current = null;
     }
     waitingIds.current = new Set(waiting.map((s) => s.session_id));
   }, [statuses]);

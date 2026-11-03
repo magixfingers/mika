@@ -19,6 +19,7 @@ export interface Agent {
   cpu: number;
   memory: number;
   uptime_secs: number;
+  host_app: string | null;
   processes: ProcNode[];
 }
 
@@ -136,6 +137,7 @@ export interface Settings {
   sound: string;
   dock_bounce: boolean;
   alert_on_done: boolean;
+  alert_popup: boolean;
   quiet_hours: boolean;
   quiet_start: string;
   quiet_end: string;
@@ -147,4 +149,16 @@ export interface Settings {
   track_codex: boolean;
   claude_limits: boolean;
   sample_interval_ms: number;
+}
+
+// Mirrors src-tauri/src/alert.rs.
+
+export interface AlertInfo {
+  session_id: string;
+  agent: string;
+  title: string;
+  body: string;
+  tool: string | null;
+  host_app: string | null;
+  since_ms: number;
 }

@@ -144,6 +144,9 @@ export function SettingsPage() {
             </button>
           </Row>
         )}
+        <Row label="Popup window" hint="A card on your desktop with a ringtone until you respond, and a button to open the session.">
+          <Toggle on={s.alert_popup} onChange={set("alert_popup")} label="Popup window" />
+        </Row>
         <Row label="Bounce Dock icon" hint="Until you switch to Mika.">
           <Toggle on={s.dock_bounce} onChange={set("dock_bounce")} label="Bounce Dock icon" />
         </Row>

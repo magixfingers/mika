@@ -66,7 +66,8 @@ impl Tracker {
             "UserPromptSubmit" | "PostToolUse" | "PostToolUseFailure" => (AgentState::Thinking, None),
             "PreToolUse" => (AgentState::Working, event.tool_name),
             // Claude Code asks via Notification; Codex has a dedicated PermissionRequest.
-            "Notification" | "PermissionRequest" => (AgentState::Waiting, None),
+            // Keep the tool name: for an approval request it says what needs approving.
+            "Notification" | "PermissionRequest" => (AgentState::Waiting, event.tool_name),
             "Stop" => (AgentState::Done, None),
             "SessionEnd" => {
                 self.sessions.remove(&event.session_id);
