@@ -7,7 +7,8 @@ import type { Agent, AgentState, ClaudeLimits, SessionStatus, Snapshot, TokenSta
 import { Mika, STATE_LABELS } from "./Mika";
 import { Activity, Limits, Models, ProviderMark, RangePicker, Sessions, SystemPanel, Totals, usageIn, type Range } from "./Usage";
 import { compact, formatBytes, formatUptime, shortPath } from "./format";
-import { startLiquidGlass } from "./liquid";
+import { liquidActivity, startLiquidGlass } from "./liquid";
+import { useEntrance, usePop, useShake, useSlidingPill } from "./motion";
 import "./App.css";
 
 // 5 minutes of history at the 1-second sample interval.
@@ -210,6 +211,15 @@ function App() {
   ]);
   const alerting = overall?.state === "waiting";
 
+  // Motion: the backdrop shader follows the token rate (~50K tok/s is full energy),
+  // Mika pops on state changes, the header shakes on alerts, panels rise in.
+  liquidActivity.target = Math.min(1, (tokens?.tokens_per_sec ?? 0) / 50_000);
+  const mikaRef = usePop<HTMLSpanElement>(overall?.state ?? "idle");
+  const titleRef = useShake<HTMLDivElement>(alerting);
+  const tabbarRef = useRef<HTMLElement>(null);
+  const tabPill = useSlidingPill(tabbarRef, '[aria-current="page"]', page);
+  useEntrance(mainRef, ".totals, .panel", `${page}:${tokens !== null}`);
+
   // Notify once each time a session starts waiting for the user.
   const waitingIds = useRef(new Set<string>());
   useEffect(() => {
@@ -245,8 +255,10 @@ function App() {
       <div className="drag-strip" onMouseDown={dragWindow} aria-hidden />
       <main className="app" ref={mainRef}>
         <header className="app-header" onMouseDown={dragWindow}>
-          <div className="app-title" data-alert={alerting || undefined}>
-            <Mika state={overall?.state ?? "idle"} size={40} />
+          <div className="app-title" data-alert={alerting || undefined} ref={titleRef}>
+            <span className="mika-slot" ref={mikaRef}>
+              <Mika state={overall?.state ?? "idle"} size={40} />
+            </span>
             <div>
               <h1>Mika</h1>
               <p className="muted small status-line" role={alerting ? "alert" : undefined}>
@@ -297,7 +309,8 @@ function App() {
           </div>
         </div>
 
-        <nav className="glass tabbar" aria-label="Pages">
+        <nav className="glass tabbar" aria-label="Pages" ref={tabbarRef}>
+          <span className="pill" ref={tabPill} aria-hidden />
           {(["overview", "agents"] as Page[]).map((p) => (
             <button key={p} aria-current={page === p ? "page" : undefined} onClick={() => setPage(p)}>
               {p === "overview" ? "Overview" : `Agents${agents.length ? ` · ${agents.length}` : ""}`}

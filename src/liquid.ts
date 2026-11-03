@@ -2,42 +2,99 @@
 // Renders liquid-dom's WebGPU glass behind the DOM.
 //
 // Mika's WebView can't copy live DOM into GPU textures (that needs Chrome's
-// HTML-in-Canvas flag), so text stays in the DOM on top. This draws only the
-// color field and a glass shape under every `.glass` element (the floating controls).
+// HTML-in-Canvas flag), so text stays in the DOM on top. This draws the
+// backdrop with a WGSL shader and a glass shape under every `.glass` element
+// (the floating controls).
 
 import { Container, Glass, Scene, WebGpuGlassCore } from "@liquid-dom/core";
 
 const MAX_DPR = 2;
-// Backdrop redraws are the costly part; the drift is slow, so 30 fps is plenty.
-const BACKDROP_INTERVAL_MS = 33;
+// How quickly the shader's energy follows the target, per frame (0..1).
+const ENERGY_EASE = 0.02;
 
-// The Vercel mesh: develop, preview and ship gradient stops blooming behind the
-// totals, the only color on the page. Positions are relative to the hero box.
-const MESH = [
-  { color: "0, 124, 240", x: 0.1, y: 0.35, r: 0.55, a: 0.32 },
-  { color: "80, 227, 194", x: 0.42, y: 0.1, r: 0.5, a: 0.34 },
-  { color: "121, 40, 202", x: 0.68, y: 0.55, r: 0.45, a: 0.22 },
-  { color: "255, 0, 128", x: 0.9, y: 0.25, r: 0.45, a: 0.26 },
-  { color: "249, 203, 40", x: 0.55, y: 0.95, r: 0.4, a: 0.24 },
-];
+/**
+ * Agent activity, 0..1, set by the app from tokens per second. The backdrop
+ * flows faster and blooms brighter as it rises, so busy agents are visible
+ * at a glance.
+ */
+export const liquidActivity = { target: 0 };
 
-type Box = { x: number; y: number; w: number; h: number };
+// The Vercel mesh (develop, preview and ship stops) as a domain-warped noise
+// field blooming around the totals, over the #fafafa canvas, with fine grain.
+const BACKDROP_SHADER = /* wgsl */ `
+struct Uniforms {
+  resolution: vec2f,
+  time: f32,
+  energy: f32,
+  hero: vec4f, // x, y, width, height in device pixels
+};
+@group(0) @binding(0) var<uniform> u: Uniforms;
 
-function drawBackdrop(ctx: CanvasRenderingContext2D, w: number, h: number, hero: Box, t: number) {
-  ctx.fillStyle = "#fafafa";
-  ctx.fillRect(0, 0, w, h);
-  const size = Math.max(hero.w, hero.h * 2);
-  for (const [i, m] of MESH.entries()) {
-    const phase = t * 0.00012 + i * 1.7;
-    const cx = hero.x + (m.x + Math.sin(phase) * 0.05) * hero.w;
-    const cy = hero.y + (m.y + Math.cos(phase * 1.3) * 0.08) * hero.h;
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, m.r * size);
-    g.addColorStop(0, `rgba(${m.color}, ${m.a})`);
-    g.addColorStop(1, `rgba(${m.color}, 0)`);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, w, h);
-  }
+@vertex
+fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+  var corners = array(vec2f(-1.0, -3.0), vec2f(-1.0, 1.0), vec2f(3.0, 1.0));
+  return vec4f(corners[i], 0.0, 1.0);
 }
+
+fn hash(p: vec2f) -> f32 {
+  return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453);
+}
+
+fn noise(p: vec2f) -> f32 {
+  let i = floor(p);
+  let f = fract(p);
+  let s = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(hash(i), hash(i + vec2f(1.0, 0.0)), s.x),
+    mix(hash(i + vec2f(0.0, 1.0)), hash(i + vec2f(1.0, 1.0)), s.x),
+    s.y,
+  );
+}
+
+fn fbm(p: vec2f) -> f32 {
+  var v = 0.0;
+  var a = 0.5;
+  var q = p;
+  for (var k = 0; k < 4; k++) {
+    v += a * noise(q);
+    q = q * 2.03 + vec2f(1.7, 9.2);
+    a *= 0.5;
+  }
+  return v;
+}
+
+@fragment
+fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
+  let center = u.hero.xy + u.hero.zw * 0.5;
+  let scale = max(u.hero.z, u.hero.w * 2.0);
+  let p = (pos.xy - center) / scale;
+  let t = u.time;
+
+  // Two layers of warping make the colors flow rather than slide.
+  let warp = vec2f(fbm(p * 2.2 + vec2f(t, -t * 0.7)), fbm(p * 2.2 + vec2f(-t * 0.6, t) + 4.1));
+  let q = p * 1.6 + (warp - 0.5) * (0.9 + 0.5 * u.energy);
+
+  let blue = vec3f(0.0, 0.486, 0.941);
+  let cyan = vec3f(0.314, 0.89, 0.761);
+  let violet = vec3f(0.475, 0.157, 0.792);
+  let pink = vec3f(1.0, 0.0, 0.502);
+  let amber = vec3f(0.976, 0.796, 0.157);
+
+  var col = mix(blue, cyan, smoothstep(0.25, 0.75, fbm(q + vec2f(0.0, t * 0.5))));
+  col = mix(col, violet, smoothstep(0.45, 0.85, fbm(q * 1.3 + 7.3)) * 0.8);
+  col = mix(col, pink, smoothstep(0.55, 0.9, fbm(q * 1.1 - 3.1 + t * 0.3)) * 0.75);
+  col = mix(col, amber, smoothstep(0.6, 0.95, fbm(q * 0.9 + 11.7)) * 0.6);
+
+  // Bloom around the hero, stronger while agents are busy.
+  let falloff = exp(-dot(p * vec2f(1.0, 1.6), p * vec2f(1.0, 1.6)) * 3.2);
+  let strength = falloff * (0.34 + 0.22 * u.energy);
+  var rgb = mix(vec3f(0.98), col, strength);
+
+  // Fine film grain keeps the gradient from banding.
+  rgb += (hash(pos.xy + fract(t) * 91.0) - 0.5) * 0.018;
+  return vec4f(rgb, 1.0);
+}
+`;
 
 /**
  * Starts the glass renderer on `canvas`. Resolves to a stop function, or null
@@ -57,6 +114,18 @@ export async function startLiquidGlass(
   if (!context) return null;
   const format = gpu.getPreferredCanvasFormat();
   const core = new WebGpuGlassCore({ device, format });
+
+  const module = device.createShaderModule({ code: BACKDROP_SHADER });
+  const pipeline = device.createRenderPipeline({
+    layout: "auto",
+    vertex: { module, entryPoint: "vs" },
+    fragment: { module, entryPoint: "fs", targets: [{ format }] },
+  });
+  const uniforms = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  const bindGroup = device.createBindGroup({
+    layout: pipeline.getBindGroupLayout(0),
+    entries: [{ binding: 0, resource: { buffer: uniforms } }],
+  });
 
   const scene = new Scene();
   // Optics follow liquid-dom's Control Center showcase demo, tinted for a light canvas.
@@ -84,10 +153,10 @@ export async function startLiquidGlass(
   let dpr = 1;
   let output: GPUTexture | null = null;
   let backdrop: GPUTexture | null = null;
-  // A DOM canvas, not OffscreenCanvas: WebKit copies it to WebGPU more reliably.
-  let backdropCanvas: HTMLCanvasElement | null = null;
-  let lastBackdrop = -Infinity;
   let raf = 0;
+  let last = performance.now();
+  let flow = 0;
+  let energy = 0;
 
   const resize = () => {
     dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
@@ -110,10 +179,6 @@ export async function startLiquidGlass(
       GPUTextureUsage.COPY_DST;
     output = device.createTexture({ size: [width, height], format, usage });
     backdrop = device.createTexture({ size: [width, height], format, usage });
-    backdropCanvas = document.createElement("canvas");
-    backdropCanvas.width = width;
-    backdropCanvas.height = height;
-    lastBackdrop = -Infinity;
   };
 
   // Mirrors every .glass element as a glass shape at the same place and size.
@@ -142,24 +207,38 @@ export async function startLiquidGlass(
     }
   };
 
+  const drawBackdrop = (encoder: GPUCommandEncoder, target: GPUTexture) => {
+    const r = root.querySelector(".totals")?.getBoundingClientRect();
+    const hero = r
+      ? [r.left * dpr, r.top * dpr, r.width * dpr, r.height * dpr]
+      : [0, 0, width, height * 0.3];
+    device.queue.writeBuffer(uniforms, 0, new Float32Array([width, height, flow, energy, ...hero]));
+    const pass = encoder.beginRenderPass({
+      colorAttachments: [{ view: target.createView(), loadOp: "clear", storeOp: "store", clearValue: [0.98, 0.98, 0.98, 1] }],
+    });
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.draw(3);
+    pass.end();
+  };
+
   const frame = (now: number) => {
     const nextDpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
     if (Math.round(canvas.clientWidth * nextDpr) !== width || Math.round(canvas.clientHeight * nextDpr) !== height) {
       resize();
     }
-    if (!output || !backdrop || !backdropCanvas) return;
-    if (now - lastBackdrop >= BACKDROP_INTERVAL_MS && (!reduceMotion.matches || lastBackdrop < 0)) {
-      const ctx = backdropCanvas.getContext("2d");
-      if (ctx) {
-        const r = root.querySelector(".totals")?.getBoundingClientRect();
-        const hero = r
-          ? { x: r.left * dpr, y: r.top * dpr, w: r.width * dpr, h: r.height * dpr }
-          : { x: 0, y: 0, w: width, h: height * 0.3 };
-        drawBackdrop(ctx, width, height, hero, reduceMotion.matches ? 0 : now);
-        device.queue.copyExternalImageToTexture({ source: backdropCanvas }, { texture: backdrop }, [width, height]);
-      }
-      lastBackdrop = now;
-    }
+    if (!output || !backdrop) return;
+
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    energy += (Math.min(1, Math.max(0, liquidActivity.target)) - energy) * ENERGY_EASE;
+    // Integrating speed (rather than scaling time) keeps the flow smooth as energy changes.
+    if (!reduceMotion.matches) flow += dt * (0.025 + 0.12 * energy);
+
+    const backdropEncoder = device.createCommandEncoder();
+    drawBackdrop(backdropEncoder, backdrop);
+    device.queue.submit([backdropEncoder.finish()]);
+
     syncShapes();
     core.render({ scene, width, height, dpr, outputTexture: output, backdropTexture: backdrop });
     const encoder = device.createCommandEncoder();
@@ -175,6 +254,7 @@ export async function startLiquidGlass(
     core.destroy();
     output?.destroy();
     backdrop?.destroy();
+    uniforms.destroy();
     device.destroy();
   };
 }

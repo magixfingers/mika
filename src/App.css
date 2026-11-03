@@ -171,6 +171,10 @@ html.liquid .glass {
   gap: 12px;
 }
 
+.mika-slot {
+  display: inline-flex;
+}
+
 .app-title {
   display: flex;
   align-items: center;
@@ -270,9 +274,32 @@ h2,
   padding: 0 11px;
 }
 
+/* The ink pill is one element that GSAP slides under the active option. */
+.segmented,
+.tabbar {
+  position: relative;
+}
+
+.segmented .pill,
+.tabbar .pill {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  border-radius: 64px;
+  background: var(--ink);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segmented button,
+.tabbar button {
+  position: relative;
+  z-index: 1;
+}
+
 .segmented button[aria-selected="true"],
 .tabbar button[aria-current="page"] {
-  background: var(--ink);
   color: #fff;
 }
 

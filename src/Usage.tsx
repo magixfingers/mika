@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { ClaudeLimits, DayUsage, ReviewSummary, SystemLoad, Thermal, ModelUsage, Provider, RateLimit, SessionStatus, SessionUsage } from "./types";
 import { Mika, STATE_LABELS } from "./Mika";
 import { CLAUDE_LOGO, OPENAI_LOGO } from "./logos";
+import { useRollingNumber, useSlidingPill } from "./motion";
 import { compact, formatCost, localDate, timeUntil } from "./format";
 
 export type Range = "day" | "month" | "total";
@@ -28,8 +29,11 @@ export function usageIn(days: DayUsage[], range: Range, now = new Date()): Map<s
 }
 
 export function RangePicker({ value, onChange }: { value: Range; onChange: (r: Range) => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  const pill = useSlidingPill(box, '[aria-selected="true"]', value);
   return (
-    <div className="glass segmented" role="tablist" aria-label="Time range">
+    <div className="glass segmented" role="tablist" aria-label="Time range" ref={box}>
+      <span className="pill" ref={pill} aria-hidden />
       {(["day", "month", "total"] as Range[]).map((r) => (
         <button key={r} role="tab" aria-selected={value === r} onClick={() => onChange(r)}>
           {r === "day" ? "Day" : r === "month" ? "Month" : "Total"}
@@ -88,14 +92,18 @@ export function SystemPanel({ system }: { system: SystemLoad }) {
   );
 }
 
+const formatCount = (n: number) => n.toLocaleString();
+
 export function Totals({ usage, range }: { usage: Map<string, ModelUsage>; range: Range }) {
   const tokens = [...usage.values()].reduce((s, u) => s + u.tokens, 0);
   const cost = [...usage.values()].reduce((s, u) => s + u.cost, 0);
+  const rolling = useRollingNumber<HTMLSpanElement>(tokens, formatCount);
   return (
     <section className="totals">
       <p className="eyebrow">{RANGE_LABELS[range]}</p>
       <p className="total-tokens">
-        {tokens.toLocaleString()}
+        {/* Text is written by useRollingNumber, so React never fights the tween. */}
+        <span ref={rolling} />
         <span className="total-compact">≈ {compact(tokens)}</span>
       </p>
       <p className="total-cost" title="Estimated from public API list prices">
