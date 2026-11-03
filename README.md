@@ -119,6 +119,20 @@ That's it. Start an agent and watch Mika come to life.
 
 ---
 
+## How it works
+
+Mika gathers from four sources on your Mac, processes them in a small Rust core, and shows the result in its window, menu bar title and alerts.
+
+![How Mika sees your agents: Claude Code hooks, agent logs, macOS and Anthropic's usage API feed four Rust modules, which update the Mika interface](docs/architecture/overview.svg)
+
+Inside the core, four background threads keep shared state up to date, Tauri sends it to the window, and the window calls back into Rust to sound alerts.
+
+![Inside Mika's Rust core: hook listener, token scanner, sampler and limits poller threads update managed state, which feeds the React UI and the menu bar title](docs/architecture/rust-core.svg)
+
+Interactive versions: [overview](docs/architecture/overview.html) · [Rust core](docs/architecture/rust-core.html).
+
+---
+
 ## For developers
 
 Mika is built with Tauri 2 (Rust) and React + TypeScript.
