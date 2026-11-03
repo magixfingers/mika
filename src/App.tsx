@@ -130,6 +130,8 @@ function GearIcon() {
   );
 }
 
+const appName = (path: string) => path.split("/").pop()?.replace(/\.app$/, "") ?? path;
+
 type Page = "overview" | "agents" | "settings";
 
 /**
@@ -138,7 +140,7 @@ type Page = "overview" | "agents" | "settings";
  * character blocked dragging; this handles any press there except on controls.
  */
 function dragWindow(e: React.MouseEvent) {
-  if (e.button !== 0 || (e.target as HTMLElement).closest("button, a, input")) return;
+  if (e.button !== 0 || (e.target as HTMLElement).closest("button, a, input, [data-clickable]")) return;
   if (e.detail === 2) {
     getCurrentWindow().toggleMaximize();
     return;
@@ -238,6 +240,10 @@ function App() {
     if (isBusy(history[agent.pid])) return inferredWorking(`pid:${agent.pid}`, agent.kind, agent.cwd, AGENT_LABELS[agent.kind]);
     return hook;
   };
+  // The app hosting a session: Codex threads all live in the ChatGPT app's one agent;
+  // Claude sessions are matched to their agent by folder.
+  const hostFor = (s: SessionStatus) =>
+    agents.find((a) => a.kind === s.agent && (s.agent === "codex" || a.cwd === s.cwd))?.host_app ?? null;
   const tokensFlowing = (tokens?.tokens_per_sec ?? 0) > 0;
   const overall = mostUrgent([
     ...statuses,
@@ -245,6 +251,13 @@ function App() {
     ...(tokensFlowing ? [inferredWorking("tokens", "claude", null, "tokens flowing")] : []),
   ]);
   const alerting = overall?.state === "waiting";
+  // The app running the waiting session, so clicking the red header goes straight there.
+  const waitingHost = alerting && overall ? hostFor(overall) : null;
+  const openWaitingSession = () => {
+    if (!waitingHost) return;
+    invoke("focus_app", { path: waitingHost });
+    invoke("dismiss_alert");
+  };
 
   // Motion: Mika pops on state changes, the header shakes on alerts, panels rise in.
   const mikaRef = usePop<HTMLSpanElement>(overall?.state ?? "idle");
@@ -263,8 +276,7 @@ function App() {
       .sort((a, b) => b.since_ms - a.since_ms);
     const fresh = waiting.find((s) => !waitingIds.current.has(s.session_id));
     if (fresh) {
-      // The app hosting this session: Codex threads all live in one ChatGPT app agent.
-      const host = agents.find((a) => a.kind === fresh.agent && (fresh.agent === "codex" || a.cwd === fresh.cwd));
+
       invoke("show_alert", {
         info: {
           session_id: fresh.session_id,
@@ -272,10 +284,10 @@ function App() {
           title: `${AGENT_LABELS[fresh.agent]} needs you`,
           body: shortPath(fresh.cwd),
           tool: fresh.tool,
-          host_app: host?.host_app ?? null,
+          host_app: hostFor(fresh),
           since_ms: fresh.since_ms,
         },
-      });
+      }).catch((err) => invoke("log_frontend", { message: `alert popup failed: ${err}` }));
       alertedId.current = fresh.session_id;
     } else if (alertedId.current && !waiting.some((s) => s.session_id === alertedId.current)) {
       invoke("dismiss_alert");
@@ -325,7 +337,17 @@ function App() {
       <div className="drag-strip" onMouseDown={dragWindow} aria-hidden />
       <main className="app" ref={mainRef}>
         <header className="app-header" onMouseDown={dragWindow}>
-          <div className="app-title" data-alert={alerting || undefined} ref={titleRef}>
+          <div
+            className="app-title"
+            data-alert={alerting || undefined}
+            data-clickable={alerting && waitingHost ? "" : undefined}
+            ref={titleRef}
+            role={alerting && waitingHost ? "button" : undefined}
+            tabIndex={alerting && waitingHost ? 0 : undefined}
+            title={alerting && waitingHost ? `Open in ${appName(waitingHost)}` : undefined}
+            onClick={openWaitingSession}
+            onKeyDown={(e) => e.key === "Enter" && openWaitingSession()}
+          >
             <span className="mika-slot" ref={mikaRef}>
               <Mika state={overall?.state ?? "idle"} size={40} />
             </span>

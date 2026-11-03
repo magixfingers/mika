@@ -8,7 +8,7 @@ use std::thread;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, LogicalPosition, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder};
 
 const WINDOW: &str = "alert";
 const WIDTH: f64 = 380.0;
@@ -65,11 +65,20 @@ pub fn show(app: &AppHandle, info: AlertInfo, ring: Option<String>) -> tauri::Re
             .visible(false)
             .build()?,
     };
-    // Top-right corner of the main screen, under the menu bar.
-    if let Some(monitor) = app.primary_monitor()? {
+    // Top-right corner of the screen the mouse is on (that's where the user is
+    // looking), under the menu bar. Monitor positions are in global physical
+    // pixels, so place the window in the same space.
+    let monitor = app
+        .cursor_position()
+        .ok()
+        .and_then(|p| app.monitor_from_point(p.x, p.y).ok().flatten())
+        .or(app.primary_monitor()?);
+    if let Some(monitor) = monitor {
         let scale = monitor.scale_factor();
-        let width = monitor.size().width as f64 / scale;
-        window.set_position(LogicalPosition::new(width - WIDTH - MARGIN, 40.0))?;
+        let (origin, size) = (monitor.position(), monitor.size());
+        let x = origin.x as f64 + size.width as f64 - (WIDTH + MARGIN) * scale;
+        let y = origin.y as f64 + 40.0 * scale;
+        window.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32))?;
     }
     window.show()?;
     window.set_focus()?;
@@ -102,22 +111,29 @@ pub fn dismiss(app: &AppHandle) {
     }
 }
 
+/// Brings an app to the front. Only ever opens an `.app` bundle that exists,
+/// never an arbitrary path; returns false when there's nothing to open.
+pub fn focus_app(path: &str) -> bool {
+    if !path.ends_with(".app") || !std::path::Path::new(path).is_dir() {
+        return false;
+    }
+    match Command::new("open").arg("-a").arg(path).spawn() {
+        Ok(_) => true,
+        Err(err) => {
+            eprintln!("mika: could not open {path}: {err}");
+            false
+        }
+    }
+}
+
 /// Brings the app running the session to the front, then closes the popup.
 pub fn open_target(app: &AppHandle) {
     let target = app.state::<AlertState>().current().and_then(|a| a.host_app);
-    match target {
-        // Only ever open an .app bundle that exists, never an arbitrary path.
-        Some(path) if path.ends_with(".app") && std::path::Path::new(&path).is_dir() => {
-            if let Err(err) = Command::new("open").arg("-a").arg(&path).spawn() {
-                eprintln!("mika: could not open {path}: {err}");
-            }
-        }
-        _ => {
-            // No host app known: show Mika itself instead.
-            if let Some(main) = app.get_webview_window("main") {
-                let _ = main.show();
-                let _ = main.set_focus();
-            }
+    if !target.as_deref().is_some_and(focus_app) {
+        // No host app known: show Mika itself instead.
+        if let Some(main) = app.get_webview_window("main") {
+            let _ = main.show();
+            let _ = main.set_focus();
         }
     }
     dismiss(app);

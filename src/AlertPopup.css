@@ -1,5 +1,6 @@
-/* The "needs you" popup in Mika's Geist style: #fafafa page, white hairline card,
-   mono eyebrow, pill buttons. Red appears only in the small label and Mika. */
+/* The "needs you" popup in Mika's Geist style: the content fills the window
+   (no frame or card border), mono eyebrow, pill buttons. Red appears only in
+   the small label and Mika. */
 
 html,
 body,
@@ -8,13 +9,12 @@ body,
 }
 
 body {
-  background: var(--canvas);
+  background: var(--elevated);
   overflow: hidden;
 }
 
 .alert-shell {
   height: 100%;
-  padding: 8px;
 }
 
 .alert-card {
@@ -22,9 +22,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px 12px;
-  border: 1px solid var(--hairline);
-  border-radius: 12px;
+  padding: 14px 16px 16px;
   background: var(--elevated);
   user-select: none;
   -webkit-user-select: none;

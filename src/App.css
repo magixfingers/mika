@@ -226,6 +226,20 @@ html.liquid .glass {
 }
 
 /* An agent is waiting for input: the status line turns red and pulses. */
+.app-title[data-clickable] {
+  cursor: pointer;
+}
+
+.app-title[data-clickable] .status-line::after {
+  content: " ›";
+}
+
+.app-title[data-clickable]:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
 .app-title[data-alert] .status-line {
   color: var(--error);
   font-weight: 500;

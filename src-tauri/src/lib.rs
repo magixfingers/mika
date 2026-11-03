@@ -131,6 +131,12 @@ fn show_alert(app: AppHandle, info: AlertInfo) -> Result<(), String> {
     alert::show(&app, info, ring).map_err(|e| e.to_string())
 }
 
+/// Brings the app running a session to the front (from the header or a row).
+#[tauri::command]
+fn focus_app(path: String) -> bool {
+    alert::focus_app(&path)
+}
+
 #[tauri::command]
 fn dismiss_alert(app: AppHandle) {
     alert::dismiss(&app);
@@ -390,7 +396,7 @@ pub fn run() {
         .manage(LatestTokens::default())
         .manage(LatestClaudeLimits::default())
         .manage(AlertState::default())
-        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens, claude_limits, alert, log_frontend, get_settings, set_settings, preview_sound, hooks_status, install_hooks, remove_hooks, show_alert, dismiss_alert, open_alert_target, current_alert])
+        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens, claude_limits, alert, log_frontend, get_settings, set_settings, preview_sound, hooks_status, install_hooks, remove_hooks, show_alert, dismiss_alert, open_alert_target, current_alert, focus_app])
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "Show Mika", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Mika", true, None::<&str>)?;
