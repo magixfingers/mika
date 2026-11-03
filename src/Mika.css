@@ -1,0 +1,65 @@
+.mika {
+  --mika-color: var(--muted);
+  overflow: visible;
+  flex: none;
+}
+
+.mika-thinking,
+.mika-working {
+  --mika-color: var(--link);
+}
+
+.mika-waiting {
+  --mika-color: var(--alert);
+}
+
+.mika-done {
+  --mika-color: var(--cyan);
+}
+
+.mika-shape {
+  fill: var(--mika-color);
+  transition: fill 300ms ease;
+}
+
+.mika-eyes ellipse {
+  fill: var(--card);
+}
+
+.mika-eyes path {
+  fill: none;
+  stroke: var(--card);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.mika-prop {
+  opacity: 0;
+}
+
+.mika-dots circle {
+  fill: var(--muted);
+}
+
+.mika-question,
+.mika-zzz {
+  fill: var(--muted);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.mika-alert {
+  fill: var(--alert);
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.mika-ring {
+  fill: none;
+  stroke: var(--mika-color);
+  stroke-width: 2;
+}
+
+.mika-spark {
+  fill: var(--mika-color);
+}

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inside Mika's Rust core</title>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper: #fafafa;
+      --color-ink: #171717;
+      --color-muted: #4d4d4d;
+      --color-accent: #0070f3;
+      --font-sans: 'Geist', system-ui, sans-serif;
+      --font-mono: 'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1280px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    /* Mika's display style: Geist 600, tightly tracked (instead of the skill's serif). */
+    h1 {
+      font-family: var(--font-sans);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2.25rem);
+      font-weight: 600;
+      letter-spacing: -0.04em;
+      line-height: 1.15;
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 1280px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture detail · Mika</p>
+    <h1>Inside Mika's Rust core</h1>
+    <div class="diagram-container">
+      <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="mika-rust-core-title mika-rust-core-desc">
+        <title id="mika-rust-core-title">Inside Mika's Rust core</title>
+        <desc id="mika-rust-core-desc">Four background threads update shared state, which Tauri emits to the React UI and uses for the menu bar title; the UI calls back into Rust to play alerts.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#8f8f8f"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#0070f3"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#0070f3"/></marker>
+        </defs>
+        <rect width="100%" height="100%" fill="#fafafa"/>
+<rect x="40" y="120" width="328" height="424" rx="8" fill="rgba(23,23,23,0.02)" stroke="rgba(23,23,23,0.10)" stroke-width="0.8"/>
+<rect x="56" y="124" width="47" height="12" rx="2" fill="#fafafa"/>
+<text x="79.5" y="133" fill="rgba(23,23,23,0.45)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">THREADS</text>
+<line x1="352" y1="196" x2="478" y2="196" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="395.0" y="176" width="42" height="12" rx="2" fill="#fafafa"/>
+<text x="416.0" y="185" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">STATUS</text>
+<line x1="352" y1="292" x2="478" y2="292" stroke="#0070f3" stroke-width="1.6" marker-end="url(#arrow-accent)"/>
+<rect x="382.5" y="272" width="67" height="12" rx="2" fill="#fafafa"/>
+<text x="416.0" y="281" fill="#0070f3" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TOKEN STATS</text>
+<line x1="352" y1="388" x2="478" y2="388" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="378.0" y="368" width="76" height="12" rx="2" fill="#fafafa"/>
+<text x="416.0" y="377" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">AGENTS · LOAD</text>
+<line x1="352" y1="484" x2="478" y2="484" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="395.0" y="464" width="42" height="12" rx="2" fill="#fafafa"/>
+<text x="416.0" y="473" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">LIMITS</text>
+<line x1="752" y1="196" x2="894" y2="196" stroke="#0070f3" stroke-width="1.6" marker-end="url(#arrow-accent)"/>
+<rect x="788.0" y="176" width="72" height="12" rx="2" fill="#fafafa"/>
+<text x="824.0" y="185" fill="#0070f3" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TAURI EVENTS</text>
+<line x1="752" y1="484" x2="894" y2="484" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="793.0" y="464" width="62" height="12" rx="2" fill="#fafafa"/>
+<text x="824.0" y="473" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TRAY TITLE</text>
+<line x1="1052" y1="232" x2="1052" y2="286" stroke="#8f8f8f" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<rect x="1060" y="254.0" width="72" height="12" rx="2" fill="#fafafa"/>
+<text x="1096.0" y="263.0" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">INVOKE ALERT</text>
+<rect x="56" y="160" width="296" height="72" rx="6" fill="#fafafa"/>
+<rect x="56" y="160" width="296" height="72" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
+<rect x="64" y="168" width="36" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="82.0" y="177" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">THREAD</text>
+<text x="204.0" y="198.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Hook listener</text>
+<text x="204.0" y="214.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">tiny_http · 127.0.0.1:47321</text>
+<rect x="56" y="256" width="296" height="72" rx="6" fill="#fafafa"/>
+<rect x="56" y="256" width="296" height="72" rx="6" fill="rgba(0,112,243,0.06)" stroke="#0070f3" stroke-width="1"/>
+<rect x="64" y="264" width="36" height="12" rx="2" fill="none" stroke="#0070f3" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="82.0" y="273" fill="#0070f3" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">THREAD</text>
+<text x="204.0" y="294.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Token scanner</text>
+<text x="204.0" y="310.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">FSEvents · 80–300 ms bursts</text>
+<rect x="56" y="352" width="296" height="72" rx="6" fill="#fafafa"/>
+<rect x="56" y="352" width="296" height="72" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
+<rect x="64" y="360" width="36" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="82.0" y="369" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">THREAD</text>
+<text x="204.0" y="390.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Sampler</text>
+<text x="204.0" y="406.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">sysinfo · every 1 s</text>
+<rect x="56" y="448" width="296" height="72" rx="6" fill="#fafafa"/>
+<rect x="56" y="448" width="296" height="72" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
+<rect x="64" y="456" width="36" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="82.0" y="465" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">THREAD</text>
+<text x="204.0" y="486.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Limits poller</text>
+<text x="204.0" y="502.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">Keychain → HTTPS · 5 min</text>
+<rect x="480" y="160" width="272" height="360" rx="6" fill="#fafafa"/>
+<rect x="480" y="160" width="272" height="360" rx="6" fill="#f2f2f2" stroke="#d4d4d4" stroke-width="1"/>
+<rect x="488" y="168" width="32" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="504.0" y="177" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">STATE</text>
+<text x="616.0" y="307.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Managed state</text>
+<text x="616.0" y="323.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">Latest snapshot</text>
+<text x="616.0" y="337.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">Statuses tracker</text>
+<text x="616.0" y="351.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">LatestTokens</text>
+<text x="616.0" y="365.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">LatestClaudeLimits</text>
+<text x="616.0" y="379.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle"></text>
+<text x="616.0" y="393.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">commands: latest_*</text>
+<rect x="896" y="160" width="312" height="72" rx="6" fill="#fafafa"/>
+<rect x="896" y="160" width="312" height="72" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
+<rect x="904" y="168" width="40" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="924.0" y="177" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">WEBVIEW</text>
+<text x="1052.0" y="198.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">React UI</text>
+<text x="1052.0" y="214.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">listen() · invoke()</text>
+<rect x="896" y="288" width="312" height="72" rx="6" fill="#fafafa"/>
+<rect x="896" y="288" width="312" height="72" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
+<rect x="904" y="296" width="40" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="924.0" y="305" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">COMMAND</text>
+<text x="1052.0" y="326.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">alert</text>
+<text x="1052.0" y="342.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">afplay Glass · Dock bounce</text>
+<rect x="896" y="448" width="312" height="72" rx="6" fill="#fafafa"/>
+<rect x="896" y="448" width="312" height="72" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
+<rect x="904" y="456" width="27" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="917.5" y="465" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">TRAY</text>
+<text x="1052.0" y="486.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Menu bar title</text>
+<text x="1052.0" y="502.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">◆ 2 agents · 4% · 1.7 GB</text>
+<line x1="40" y1="632" x2="1240" y2="632" stroke="#ebebeb" stroke-width="0.8"/>
+<text x="40" y="652" fill="#4d4d4d" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+<rect x="120" y="641" width="28" height="14" rx="3" fill="#ffffff" stroke="#d4d4d4"/>
+<text x="156" y="652" fill="#4d4d4d" font-size="10" font-family="'Geist', sans-serif">Thread / output</text>
+<rect x="278" y="641" width="28" height="14" rx="3" fill="#f2f2f2" stroke="#d4d4d4"/>
+<text x="314" y="652" fill="#4d4d4d" font-size="10" font-family="'Geist', sans-serif">Shared state</text>
+<rect x="418" y="641" width="28" height="14" rx="3" fill="rgba(0,112,243,0.06)" stroke="#0070f3"/>
+<text x="454" y="652" fill="#4d4d4d" font-size="10" font-family="'Geist', sans-serif">Focal path</text>
+<line x1="546" y1="648" x2="574" y2="648" stroke="#8f8f8f" stroke-width="1.4"/>
+<text x="582" y="652" fill="#4d4d4d" font-size="10" font-family="'Geist', sans-serif">Emit / update</text>
+<line x1="692" y1="648" x2="720" y2="648" stroke="#8f8f8f" stroke-width="1.4" stroke-dasharray="5,4"/>
+<text x="728" y="652" fill="#4d4d4d" font-size="10" font-family="'Geist', sans-serif">UI → Rust command</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

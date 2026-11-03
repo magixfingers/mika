@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How Mika sees your agents</title>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper: #fafafa;
+      --color-ink: #171717;
+      --color-muted: #4d4d4d;
+      --color-accent: #0070f3;
+      --font-sans: 'Geist', system-ui, sans-serif;
+      --font-mono: 'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1280px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    /* Mika's display style: Geist 600, tightly tracked (instead of the skill's serif). */
+    h1 {
+      font-family: var(--font-sans);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2.25rem);
+      font-weight: 600;
+      letter-spacing: -0.04em;
+      line-height: 1.15;
+      margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 1280px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · Mika</p>
+    <h1>How Mika sees your agents</h1>
+    <div class="diagram-container">
+      <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="mika-architecture-title mika-architecture-desc">
+        <title id="mika-architecture-title">How Mika sees your agents</title>
+        <desc id="mika-architecture-desc">Mika's data flow: Claude Code hooks, agent logs, macOS and Anthropic's usage API feed four Rust modules, which send status, tokens, agents and limits to the window, menu bar and alerts.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#8f8f8f"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#0070f3"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#0070f3"/></marker>
+        </defs>
+        <rect width="100%" height="100%" fill="#fafafa"/>
+<rect x="40" y="120" width="296" height="424" rx="8" fill="rgba(23,23,23,0.02)" stroke="rgba(23,23,23,0.10)" stroke-width="0.8"/>
+<rect x="56" y="124" width="126" height="12" rx="2" fill="#fafafa"/>
+<text x="119.0" y="133" fill="rgba(23,23,23,0.45)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">ON YOUR MAC + ANTHROPIC</text>
+<rect x="440" y="120" width="384" height="424" rx="8" fill="rgba(23,23,23,0.02)" stroke="rgba(23,23,23,0.10)" stroke-width="0.8"/>
+<rect x="456" y="124" width="101" height="12" rx="2" fill="#fafafa"/>
+<text x="506.5" y="133" fill="rgba(23,23,23,0.45)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">RUST CORE · LIB.RS</text>
+<line x1="320" y1="196" x2="454" y2="196" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="354.5" y="176" width="67" height="12" rx="2" fill="#fafafa"/>
+<text x="388.0" y="185" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">HOOK EVENTS</text>
+<line x1="320" y1="292" x2="454" y2="292" stroke="#0070f3" stroke-width="1.6" marker-end="url(#arrow-accent)"/>
+<rect x="359.5" y="272" width="57" height="12" rx="2" fill="#fafafa"/>
+<text x="388.0" y="281" fill="#0070f3" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">NEW LINES</text>
+<line x1="320" y1="388" x2="454" y2="388" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="367.0" y="368" width="42" height="12" rx="2" fill="#fafafa"/>
+<text x="388.0" y="377" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SAMPLE</text>
+<line x1="320" y1="484" x2="454" y2="484" stroke="#8f8f8f" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+<rect x="357.0" y="464" width="62" height="12" rx="2" fill="#fafafa"/>
+<text x="388.0" y="473" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">USAGE JSON</text>
+<line x1="808" y1="196" x2="982" y2="196" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="870.0" y="176" width="52" height="12" rx="2" fill="#fafafa"/>
+<text x="896.0" y="185" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">STATUSES</text>
+<line x1="808" y1="292" x2="982" y2="292" stroke="#0070f3" stroke-width="1.6" marker-end="url(#arrow-accent)"/>
+<rect x="875.0" y="272" width="42" height="12" rx="2" fill="#fafafa"/>
+<text x="896.0" y="281" fill="#0070f3" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TOKENS</text>
+<line x1="808" y1="388" x2="982" y2="388" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="875.0" y="368" width="42" height="12" rx="2" fill="#fafafa"/>
+<text x="896.0" y="377" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">AGENTS</text>
+<line x1="808" y1="484" x2="982" y2="484" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="858.0" y="464" width="76" height="12" rx="2" fill="#fafafa"/>
+<text x="896.0" y="473" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CLAUDE_LIMITS</text>
+<rect x="56" y="160" width="264" height="72" rx="6" fill="#fafafa"/>
+<rect x="56" y="160" width="264" height="72" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
+<rect x="64" y="168" width="32" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="80.0" y="177" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">HOOKS</text>
+<text x="188.0" y="198.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Claude Code hooks</text>
+<text x="188.0" y="214.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">curl POST :47321</text>
+<rect x="56" y="256" width="264" height="72" rx="6" fill="#fafafa"/>
+<rect x="56" y="256" width="264" height="72" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
+<rect x="64" y="264" width="27" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="77.5" y="273" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">LOGS</text>
+<text x="188.0" y="294.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Agent session logs</text>
+<text x="188.0" y="310.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">~/.claude · ~/.codex</text>
+<rect x="56" y="352" width="264" height="72" rx="6" fill="#fafafa"/>
+<rect x="56" y="352" width="264" height="72" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
+<rect x="64" y="360" width="32" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="80.0" y="369" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">MACOS</text>
+<text x="188.0" y="390.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">macOS</text>
+<text x="188.0" y="406.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">processes · memory · thermal</text>
+<rect x="56" y="448" width="264" height="72" rx="6" fill="#fafafa"/>
+<rect x="56" y="448" width="264" height="72" rx="6" fill="#fafafa" stroke="#8f8f8f" stroke-width="1" stroke-dasharray="4,3"/>
+<rect x="64" y="456" width="23" height="12" rx="2" fill="none" stroke="#8f8f8f" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="75.5" y="465" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">API</text>
+<text x="188.0" y="486.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Anthropic usage API</text>
+<text x="188.0" y="502.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">Keychain sign-in · HTTPS</text>
+<rect x="456" y="160" width="352" height="72" rx="6" fill="#fafafa"/>
+<rect x="456" y="160" width="352" height="72" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
+<rect x="464" y="168" width="27" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="477.5" y="177" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">RUST</text>
+<text x="632.0" y="198.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">status.rs</text>
+<text x="632.0" y="214.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">session state machine</text>
+<rect x="456" y="256" width="352" height="72" rx="6" fill="#fafafa"/>
+<rect x="456" y="256" width="352" height="72" rx="6" fill="rgba(0,112,243,0.06)" stroke="#0070f3" stroke-width="1"/>
+<rect x="464" y="264" width="27" height="12" rx="2" fill="none" stroke="#0070f3" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="477.5" y="273" fill="#0070f3" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">RUST</text>
+<text x="632.0" y="294.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">tokens.rs</text>
+<text x="632.0" y="310.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">FSEvents · incremental parse</text>
+<rect x="456" y="352" width="352" height="72" rx="6" fill="#fafafa"/>
+<rect x="456" y="352" width="352" height="72" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
+<rect x="464" y="360" width="27" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="477.5" y="369" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">RUST</text>
+<text x="632.0" y="390.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">sampler.rs</text>
+<text x="632.0" y="406.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">every 1 s · agents + system load</text>
+<rect x="456" y="448" width="352" height="72" rx="6" fill="#fafafa"/>
+<rect x="456" y="448" width="352" height="72" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
+<rect x="464" y="456" width="27" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="477.5" y="465" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">RUST</text>
+<text x="632.0" y="486.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">claude_limits.rs</text>
+<text x="632.0" y="502.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">every 5 min · 15 min backoff</text>
+<rect x="984" y="160" width="256" height="360" rx="6" fill="#fafafa"/>
+<rect x="984" y="160" width="256" height="360" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
+<rect x="992" y="168" width="19" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
+<text x="1001.5" y="177" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">UI</text>
+<text x="1112.0" y="307.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Mika interface</text>
+<text x="1112.0" y="323.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">React window</text>
+<text x="1112.0" y="337.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">status · tokens · sessions</text>
+<text x="1112.0" y="351.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">GSAP · liquid glass</text>
+<text x="1112.0" y="365.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle"></text>
+<text x="1112.0" y="379.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">menu bar title</text>
+<text x="1112.0" y="393.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">sound + Dock alert</text>
+<line x1="40" y1="632" x2="1240" y2="632" stroke="#ebebeb" stroke-width="0.8"/>
+<text x="40" y="652" fill="#4d4d4d" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+<rect x="120" y="641" width="28" height="14" rx="3" fill="#ffffff" stroke="#d4d4d4"/>
+<text x="156" y="652" fill="#4d4d4d" font-size="10" font-family="'Geist', sans-serif">Component</text>
+<rect x="242" y="641" width="28" height="14" rx="3" fill="rgba(0,112,243,0.06)" stroke="#0070f3"/>
+<text x="278" y="652" fill="#4d4d4d" font-size="10" font-family="'Geist', sans-serif">Focal path</text>
+<rect x="370" y="641" width="28" height="14" rx="3" fill="#fafafa" stroke="#8f8f8f" stroke-dasharray="4,3"/>
+<text x="406" y="652" fill="#4d4d4d" font-size="10" font-family="'Geist', sans-serif">External service</text>
+<line x1="534" y1="648" x2="562" y2="648" stroke="#8f8f8f" stroke-width="1.4"/>
+<text x="570" y="652" fill="#4d4d4d" font-size="10" font-family="'Geist', sans-serif">Data / event</text>
+<line x1="674" y1="648" x2="702" y2="648" stroke="#8f8f8f" stroke-width="1.4" stroke-dasharray="5,4"/>
+<text x="710" y="652" fill="#4d4d4d" font-size="10" font-family="'Geist', sans-serif">Network, polled</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,28 +1,38 @@
+/* Tokens follow the Vercel Geist analysis in DESIGN-vercel.md: ink on a
+   near-white canvas, hairline cards, Geist Mono eyebrows, and color only in
+   the mesh gradient behind the totals. Liquid glass is kept for the floating
+   range switch and tab bar. */
 :root {
-  --bg: #f6f6f7;
-  --card: #ffffff;
-  --text: #16161a;
-  --muted: #6b6b76;
-  --border: #e4e4e9;
-  --claude: #d97757;
-  --codex: #10a37f;
+  color-scheme: light;
+  --ink: #171717;
+  --body: #4d4d4d;
+  --mute: #8f8f8f;
+  --faint: #a1a1a1;
+  --hairline: #ebebeb;
+  --hairline-soft: #f2f2f2;
+  --canvas: #fafafa;
+  --elevated: #ffffff;
+  --link: #0070f3;
+  --error: #ee0000;
+  --violet: #7928ca;
+  --cyan: #50e3c2;
 
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif;
-  font-size: 14px;
-  line-height: 1.4;
-  color: var(--text);
-  background-color: var(--bg);
+  /* Aliases used by Mika.css. */
+  --text: var(--ink);
+  --muted: var(--mute);
+  --card: var(--elevated);
+  --alert: var(--error);
+
+  --sans: "Geist Variable", Inter, Arial, sans-serif;
+  --mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  font-family: var(--sans);
+  /* body-md, growing slightly with the window. */
+  font-size: clamp(14px, 0.78rem + 0.5vw, 16px);
+  line-height: 1.43;
+  color: var(--ink);
+  background: var(--canvas);
   -webkit-font-smoothing: antialiased;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1c1c1f;
-    --card: #26262a;
-    --text: #ececf1;
-    --muted: #9a9aa6;
-    --border: #36363c;
-  }
 }
 
 * {
@@ -31,163 +41,662 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  /* Transparent: an opaque body would paint over the backdrop layers at z-index -1.
+     The canvas color comes from :root. */
+  background: transparent;
+  /* No scrollbar: pages are sized to fit (see .pages). */
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+/* --- Backdrop: WebGPU canvas, with a CSS mesh as the no-WebGPU fallback --- */
+
+.liquid-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  width: 100vw;
+  height: 100vh;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--canvas);
+}
+
+html.liquid .backdrop {
+  display: none;
+}
+
+/* --- Glass: only the floating controls --- */
+
+.glass {
+  position: relative;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--hairline);
+  box-shadow:
+    0 2px 2px rgba(0, 0, 0, 0.04),
+    0 8px 16px -4px rgba(0, 0, 0, 0.08);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+}
+
+html.liquid .glass {
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* --- Layout --- */
+
+.drag-strip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  z-index: 10;
+}
+
+.app-header {
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .app {
-  padding: 20px;
+  height: 100vh;
+  /* Top padding clears the overlay traffic lights. */
+  padding: 36px 16px 16px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 12px;
+}
+
+/* Narrow windows show one page at a time; wide ones show both side by side. */
+.pages {
+  min-height: 0;
+  display: grid;
+}
+
+.page {
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow: hidden;
+}
+
+.pages[data-page="overview"] .page-agents,
+.pages[data-page="agents"] .page-overview {
+  display: none;
+}
+
+@media (min-width: 760px) {
+  .pages {
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .pages .page {
+    display: flex !important;
+  }
+
+  .tabbar button {
+    display: none;
+  }
 }
 
 .app-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 
-.app-header h1 {
-  margin: 0;
-  font-size: 20px;
+.mika-slot {
+  display: inline-flex;
 }
 
-.summary,
-.empty,
-.agent-hint {
-  color: var(--muted);
-  margin: 0;
+.app-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.empty {
+/* An agent is waiting for input: the status line turns red and pulses. */
+.app-title[data-alert] .status-line {
+  color: var(--error);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .app-title[data-alert] .status-line {
+    animation: alert-pulse 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes alert-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* heading-md */
+h1 {
+  font-size: 1.43rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.02em;
+}
+
+/* mono-eyebrow */
+h2,
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.33;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+
+.muted {
+  color: var(--mute);
+}
+
+/* body-sm */
+.small {
+  font-size: 0.86rem;
+  line-height: 1.33;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.loading {
   padding: 40px 0;
   text-align: center;
 }
 
-.agent {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-}
+/* --- Controls: category pills, active state in ink --- */
 
-.agent {
-  --accent: var(--muted);
-}
-
-.agent-claude {
-  --accent: var(--claude);
-}
-
-.agent-codex {
-  --accent: var(--codex);
-}
-
-.agent-header {
-  all: unset;
-  box-sizing: border-box;
-  width: 100%;
-  padding: 12px 14px;
-  display: grid;
-  grid-template-columns: 1fr 120px auto;
+.segmented,
+.tabbar {
+  display: flex;
   align-items: center;
-  gap: 16px;
-  cursor: pointer;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 64px;
 }
 
-.agent-title {
+.segmented button,
+.tabbar button {
+  border: 0;
+  background: none;
+  height: 2.1em;
+  padding: 0 14px;
+  border-radius: 64px;
+  font-weight: 500;
+  color: var(--body);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.segmented button {
+  font-size: 0.86rem;
+  padding: 0 11px;
+}
+
+/* The ink pill is one element that GSAP slides under the active option. */
+.segmented,
+.tabbar {
+  position: relative;
+}
+
+.segmented .pill,
+.tabbar .pill {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  border-radius: 64px;
+  background: var(--ink);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segmented button,
+.tabbar button {
+  position: relative;
+  z-index: 1;
+}
+
+.segmented button[aria-selected="true"],
+.tabbar button[aria-current="page"] {
+  color: #fff;
+}
+
+.tabbar .rate {
+  margin-left: auto;
+  padding-right: 12px;
+}
+
+.rate {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Totals: the hero, over the mesh gradient --- */
+
+.totals {
+  padding: 8px 2px 4px;
+}
+
+/* display-xl */
+.total-tokens {
+  font-size: clamp(2.2rem, 10vw, 3.4rem);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+  margin: 6px 0;
+  word-break: break-all;
+}
+
+.total-compact {
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--mute);
+  margin-left: 8px;
+}
+
+.total-cost {
+  font-size: 1.07rem;
+  font-weight: 500;
+  color: var(--body);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Cards: feature-card, flat hairline --- */
+
+.panel {
+  background: var(--elevated);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  gap: 10px;
 }
 
-.agent-kind {
-  font-weight: 600;
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.name {
   display: flex;
   align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.mark {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  fill: var(--ink);
+}
+
+.plan {
+  text-transform: capitalize;
+}
+
+.limit-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.limit-group + .limit-group {
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+}
+
+.limit {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
 }
 
-.agent-kind::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
+.meter,
+.share {
+  height: 3px;
+  border-radius: 9999px;
+  /* Pale blue track, matching the empty end of the heatmap scale. */
+  background: rgba(0, 112, 243, 0.12);
+  overflow: hidden;
 }
 
-.agent-cwd {
-  color: var(--muted);
-  font-size: 12px;
+.meter span,
+.share::after {
+  content: "";
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transform: scaleX(var(--fill));
+  transform-origin: left;
+  transition: transform 400ms ease;
+}
+
+.meter span,
+.share::after {
+  background: var(--link);
+}
+
+.share {
+  margin-top: 6px;
+}
+
+/* --- System load --- */
+
+.load {
+  gap: 8px;
+}
+
+.load-row {
+  display: grid;
+  grid-template-columns: 3.4em 1fr minmax(5.5em, auto);
+  align-items: center;
+  gap: 12px;
+}
+
+.load-label {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+
+.load-value {
+  text-align: right;
+}
+
+.warn {
+  color: var(--error);
+  font-weight: 500;
+}
+
+/* --- Sessions and agents --- */
+
+.session,
+.agent-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Fixed slot so titles line up whether the row shows a logo or Mika. */
+.lead {
+  flex: none;
+  width: 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.session-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.session-text > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.session {
+  align-items: flex-start;
+}
+
+.session .lead {
+  padding-top: 2px;
+}
+
+.session-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-body .name {
+  font-weight: 500;
+}
+
+.session-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-body .share {
+  margin-top: 6px;
+}
+
+.context {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.meter.mini {
+  width: 32px;
+}
+
+/* Sessions take the remaining height and show as many rows as fit. */
+.sessions {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Fills the card; Sessions measures it to decide how many rows fit a page. */
+.sessions .list {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* app-control buttons: 6px squares, current page in ink */
+.pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+}
+
+.pager button {
+  min-width: 2em;
+  height: 2em;
+  padding: 0 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--elevated);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--body);
+  cursor: pointer;
+}
+
+.pager button[aria-current="page"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.pager button:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.agent-header {
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
 .sparkline {
-  width: 120px;
-  height: 30px;
+  flex: none;
+  width: 64px;
+  height: 22px;
 }
 
 .sparkline polyline {
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--link);
   stroke-width: 1.5;
 }
 
 .agent-stats {
   display: flex;
-  gap: 16px;
-  margin: 0;
-}
-
-.agent-stats div {
-  text-align: right;
-  min-width: 48px;
-}
-
-.agent-stats dt {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.agent-stats dd {
-  margin: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 52px;
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
 }
 
-.agent-hint {
-  padding: 0 14px 10px;
-  font-size: 12px;
-}
-
+/* code-block style for the process table */
 .proc-tree {
   width: 100%;
+  margin-top: 8px;
   border-collapse: collapse;
-  font-size: 12px;
-  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 0.78rem;
 }
 
 .proc-tree th {
   text-align: left;
-  color: var(--muted);
+  color: var(--mute);
   font-weight: 500;
-  padding: 6px 8px;
+  padding: 4px;
 }
 
 .proc-tree td {
-  padding: 4px 8px;
-  border-top: 1px solid var(--border);
+  padding: 3px 4px;
+  border-top: 1px solid var(--hairline);
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.proc-tree th:not(:first-child),
+.proc-tree .num {
+  text-align: right;
+}
+
+/* --- Activity and trend --- */
+
+.heatmap {
+  display: grid;
+  grid-template-rows: repeat(7, 1fr);
+  grid-auto-flow: column;
+  gap: 2px;
+}
+
+.cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: var(--hairline-soft);
+  background-image: linear-gradient(rgba(0, 112, 243, var(--level)), rgba(0, 112, 243, var(--level)));
+}
+
+.cell[data-hidden] {
+  visibility: hidden;
+}
+
+.axis {
+  position: relative;
+  height: 1.2em;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--mute);
+}
+
+.months span {
+  position: absolute;
+  transform: translateX(-50%);
   white-space: nowrap;
 }
 
-.proc-tree .num,
-.proc-tree th:not(:first-child) {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+.dates {
+  display: flex;
+  justify-content: space-between;
 }
 
-.tree-branch {
-  color: var(--muted);
+.trend-head {
+  margin-top: 4px;
+}
+
+.trend {
+  width: 100%;
+  height: 4.5em;
+  overflow: visible;
+}
+
+.trend path {
+  fill: none;
+  stroke: var(--link);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }

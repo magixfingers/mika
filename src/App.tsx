@@ -1,35 +1,54 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Agent, Snapshot } from "./types";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { LogicalSize } from "@tauri-apps/api/dpi";
+import type { Agent, AgentState, ClaudeLimits, SessionStatus, Snapshot, TokenStats } from "./types";
+import { Mika, STATE_LABELS } from "./Mika";
+import { Activity, Limits, Models, ProviderMark, RangePicker, Sessions, SystemPanel, Totals, usageIn, type Range } from "./Usage";
+import { compact, formatBytes, formatUptime, shortPath } from "./format";
+import { startLiquidGlass } from "./liquid";
+import { useEntrance, usePop, useShake, useSlidingPill } from "./motion";
 import "./App.css";
 
-// 10 minutes of history at the 2-second sample interval.
+// 5 minutes of history at the 1-second sample interval.
 const HISTORY_LENGTH = 300;
+
+// Most urgent last, matching AgentState's order in status.rs.
+const URGENCY: AgentState[] = ["idle", "done", "thinking", "working", "waiting"];
+
+function mostUrgent(statuses: SessionStatus[]): SessionStatus | null {
+  return statuses.reduce<SessionStatus | null>(
+    (top, s) => (top === null || URGENCY.indexOf(s.state) > URGENCY.indexOf(top.state) ? s : top),
+    null,
+  );
+}
+
+// An agent averaging this much CPU over its last few samples counts as working,
+// for agents without hooks (Codex, or Claude sessions started before hooks).
+const BUSY_CPU = 5;
+const BUSY_SAMPLES = 3;
+
+function isBusy(history: number[] | undefined): boolean {
+  const recent = (history ?? []).slice(-BUSY_SAMPLES);
+  return recent.length > 0 && recent.reduce((a, b) => a + b, 0) / recent.length >= BUSY_CPU;
+}
+
+/** A working status inferred from activity; `tool` carries what was busy. */
+function inferredWorking(id: string, cwd: string | null, what: string): SessionStatus {
+  return { session_id: id, cwd, state: "working", tool: what, since_ms: 0 };
+}
+
+function describe(status: SessionStatus): string {
+  return status.state === "working" && status.tool
+    ? `${STATE_LABELS.working} · ${status.tool}`
+    : STATE_LABELS[status.state];
+}
 
 const AGENT_LABELS: Record<Agent["kind"], string> = {
   claude: "Claude Code",
   codex: "Codex",
 };
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
-  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(0)} MB`;
-  return `${(bytes / 1024).toFixed(0)} KB`;
-}
-
-function formatUptime(secs: number): string {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m`;
-  return `${secs}s`;
-}
-
-function shortPath(path: string | null): string {
-  if (!path) return "unknown folder";
-  return path.replace(/^\/Users\/[^/]+/, "~");
-}
 
 function Sparkline({ values }: { values: number[] }) {
   if (values.length < 2) return <svg className="sparkline" />;
@@ -46,75 +65,107 @@ function Sparkline({ values }: { values: number[] }) {
   );
 }
 
-function AgentCard({ agent, history }: { agent: Agent; history: number[] }) {
+function AgentRow({ agent, history, status }: { agent: Agent; history: number[]; status: SessionStatus | null }) {
   const [expanded, setExpanded] = useState(false);
-  const childCount = agent.processes.length - 1;
-
   return (
-    <section className={`agent agent-${agent.kind}`}>
-      <button className="agent-header" onClick={() => setExpanded(!expanded)}>
-        <div className="agent-title">
-          <span className="agent-kind">{AGENT_LABELS[agent.kind]}</span>
-          <span className="agent-cwd">{shortPath(agent.cwd)}</span>
+    <li className={`agent agent-${agent.kind}`}>
+      <button className="agent-header" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
+        <span className="lead">{status ? <Mika state={status.state} size={22} /> : <ProviderMark provider={agent.kind} />}</span>
+        <div className="session-text">
+          <span className="name">{AGENT_LABELS[agent.kind]}</span>
+          <span className="muted small">
+            {status ? `${describe(status)} · ` : ""}
+            {shortPath(agent.cwd)}
+          </span>
         </div>
         <Sparkline values={history} />
-        <dl className="agent-stats">
-          <div>
-            <dt>CPU</dt>
-            <dd>{agent.cpu.toFixed(0)}%</dd>
-          </div>
-          <div>
-            <dt>Memory</dt>
-            <dd>{formatBytes(agent.memory)}</dd>
-          </div>
-          <div>
-            <dt>Up</dt>
-            <dd>{formatUptime(agent.uptime_secs)}</dd>
-          </div>
-          <div>
-            <dt>Procs</dt>
-            <dd>{agent.processes.length}</dd>
-          </div>
-        </dl>
+        <div className="agent-stats">
+          <span>{agent.cpu.toFixed(0)}%</span>
+          <span className="muted small">{formatBytes(agent.memory)}</span>
+        </div>
       </button>
-
       {expanded && (
         <table className="proc-tree">
           <thead>
             <tr>
               <th>Process</th>
-              <th>PID</th>
               <th>CPU</th>
               <th>Memory</th>
             </tr>
           </thead>
           <tbody>
             {agent.processes.map((p) => (
-              <tr key={p.pid} title={p.command}>
-                <td style={{ paddingLeft: `${8 + p.depth * 16}px` }}>
-                  {p.depth > 0 && <span className="tree-branch">└ </span>}
+              <tr key={p.pid} title={`${p.pid} · ${p.command}`}>
+                <td style={{ paddingLeft: `${4 + p.depth * 12}px` }}>
+                  {p.depth > 0 && <span className="muted">└ </span>}
                   {p.name}
                 </td>
-                <td className="num">{p.pid}</td>
                 <td className="num">{p.cpu.toFixed(1)}%</td>
                 <td className="num">{formatBytes(p.memory)}</td>
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={3} className="muted">
+                Up {formatUptime(agent.uptime_secs)} · pid {agent.pid}
+              </td>
+            </tr>
+          </tfoot>
         </table>
       )}
-      {!expanded && childCount > 0 && (
-        <p className="agent-hint">
-          {childCount} child process{childCount === 1 ? "" : "es"} — click to show
-        </p>
-      )}
-    </section>
+    </li>
   );
 }
 
+type Page = "overview" | "agents";
+
+/**
+ * Moves the window when the header or top strip is dragged. data-tauri-drag-region
+ * only reacts to the element itself, not its children, so the header's text and
+ * character blocked dragging; this handles any press there except on controls.
+ */
+function dragWindow(e: React.MouseEvent) {
+  if (e.button !== 0 || (e.target as HTMLElement).closest("button, a, input")) return;
+  if (e.detail === 2) {
+    getCurrentWindow().toggleMaximize();
+    return;
+  }
+  getCurrentWindow().startDragging();
+}
+
 function App() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const [page, setPage] = useState<Page>("overview");
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [history, setHistory] = useState<Record<number, number[]>>({});
+  const [statuses, setStatuses] = useState<SessionStatus[]>([]);
+  const [tokens, setTokens] = useState<TokenStats | null>(null);
+  const [claudeLimits, setClaudeLimits] = useState<ClaudeLimits | null>(null);
+  const [range, setRange] = useState<Range>("day");
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const main = mainRef.current;
+    if (!canvas || !main) return;
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    const report = (message: string) => invoke("log_frontend", { message });
+    startLiquidGlass(canvas, main, (m) => report(`WebGPU error: ${m}`))
+      .then((s) => {
+        // Unmounted while WebGPU was starting.
+        if (cancelled) return s?.();
+        stop = s;
+        document.documentElement.classList.toggle("liquid", s !== null);
+        invoke("log_frontend", { message: s ? "liquid glass running on WebGPU" : "WebGPU unavailable, using CSS glass" });
+      })
+      .catch((err) => invoke("log_frontend", { message: `liquid glass failed: ${err}` }));
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, []);
 
   useEffect(() => {
     const apply = (next: Snapshot) => {
@@ -129,35 +180,144 @@ function App() {
     };
 
     invoke<Snapshot | null>("latest_snapshot").then((s) => s && apply(s));
-    const unlisten = listen<Snapshot>("agents", (event) => apply(event.payload));
+    invoke<SessionStatus[]>("session_statuses").then(setStatuses);
+    invoke<TokenStats | null>("latest_tokens").then((t) => t && setTokens(t));
+    invoke<ClaudeLimits | null>("claude_limits").then(setClaudeLimits);
+    const unlisteners = [
+      listen<Snapshot>("agents", (event) => apply(event.payload)),
+      listen<SessionStatus[]>("statuses", (event) => setStatuses(event.payload)),
+      listen<TokenStats>("tokens", (event) => setTokens(event.payload)),
+      listen<ClaudeLimits>("claude_limits", (event) => setClaudeLimits(event.payload)),
+    ];
     return () => {
-      unlisten.then((fn) => fn());
+      unlisteners.forEach((u) => u.then((fn) => fn()));
     };
   }, []);
 
   const agents = snapshot?.agents ?? [];
-  const totalCpu = agents.reduce((sum, a) => sum + a.cpu, 0);
-  const totalMemory = agents.reduce((sum, a) => sum + a.memory, 0);
+  // Hooks report a session's folder, so an agent shows the most urgent session in its folder.
+  // Hook states win when they report activity; otherwise CPU use marks the agent as working.
+  const statusFor = (agent: Agent): SessionStatus | null => {
+    const hook = agent.kind === "claude" ? mostUrgent(statuses.filter((s) => s.cwd === agent.cwd)) : null;
+    if (hook && hook.state !== "idle" && hook.state !== "done") return hook;
+    if (isBusy(history[agent.pid])) return inferredWorking(`pid:${agent.pid}`, agent.cwd, AGENT_LABELS[agent.kind]);
+    return hook;
+  };
+  const tokensFlowing = (tokens?.tokens_per_sec ?? 0) > 0;
+  const overall = mostUrgent([
+    ...statuses,
+    ...agents.flatMap((a) => statusFor(a) ?? []),
+    ...(tokensFlowing ? [inferredWorking("tokens", null, "tokens flowing")] : []),
+  ]);
+  const alerting = overall?.state === "waiting";
+
+  // Motion: Mika pops on state changes, the header shakes on alerts, panels rise in.
+  const mikaRef = usePop<HTMLSpanElement>(overall?.state ?? "idle");
+  const titleRef = useShake<HTMLDivElement>(alerting);
+  const tabbarRef = useRef<HTMLElement>(null);
+  const tabPill = useSlidingPill(tabbarRef, '[aria-current="page"]', page);
+  useEntrance(mainRef, ".totals, .panel", `${page}:${tokens !== null}`);
+
+  // Notify once each time a session starts waiting for the user.
+  const waitingIds = useRef(new Set<string>());
+  useEffect(() => {
+    const waiting = statuses.filter((s) => s.state === "waiting");
+    for (const s of waiting) {
+      if (waitingIds.current.has(s.session_id)) continue;
+      invoke("alert", { title: "Mika · an agent needs you", body: `Claude Code in ${shortPath(s.cwd)} is waiting for your input.` });
+    }
+    waitingIds.current = new Set(waiting.map((s) => s.session_id));
+  }, [statuses]);
+  const usage = useMemo(() => usageIn(tokens?.days ?? [], range), [tokens, range]);
+
+  // On first load, grow the window so the whole overview shows without scrolling.
+  const fitted = useRef(false);
+  useEffect(() => {
+    if (fitted.current || tokens === null) return;
+    fitted.current = true;
+    requestAnimationFrame(() => {
+      const page = mainRef.current?.querySelector<HTMLElement>(".page-overview");
+      if (!page) return;
+      const missing = page.scrollHeight - page.clientHeight;
+      if (missing <= 0) return;
+      const height = Math.min(window.innerHeight + missing + 8, window.screen.availHeight - 24);
+      getCurrentWindow().setSize(new LogicalSize(window.innerWidth, height));
+    });
+  }, [tokens]);
 
   return (
-    <main className="app">
-      <header className="app-header">
-        <h1>Mika</h1>
-        <p className="summary">
-          {snapshot === null
-            ? "Sampling…"
-            : `${agents.length} agent${agents.length === 1 ? "" : "s"} · ${totalCpu.toFixed(0)}% CPU · ${formatBytes(totalMemory)}`}
-        </p>
-      </header>
+    <>
+      <div className="backdrop" aria-hidden />
+      <canvas className="liquid-canvas" ref={canvasRef} aria-hidden />
+      {/* The strip beside the traffic lights, where a title bar would be. */}
+      <div className="drag-strip" onMouseDown={dragWindow} aria-hidden />
+      <main className="app" ref={mainRef}>
+        <header className="app-header" onMouseDown={dragWindow}>
+          <div className="app-title" data-alert={alerting || undefined} ref={titleRef}>
+            <span className="mika-slot" ref={mikaRef}>
+              <Mika state={overall?.state ?? "idle"} size={40} />
+            </span>
+            <div>
+              <h1>Mika</h1>
+              <p className="muted small status-line" role={alerting ? "alert" : undefined}>
+                {overall
+                  ? alerting
+                    ? `Needs you · ${shortPath(overall.cwd)}`
+                    : describe(overall)
+                  : "Watching for agents"}
+              </p>
+            </div>
+          </div>
+          <RangePicker value={range} onChange={setRange} />
+        </header>
 
-      {snapshot !== null && agents.length === 0 && (
-        <p className="empty">No Claude Code or Codex sessions running.</p>
-      )}
+        <div className="pages" data-page={page}>
+          <div className="page page-overview">
+            {snapshot && <SystemPanel system={snapshot.system} />}
+            {tokens === null ? (
+              <p className="muted loading">Reading session logs…</p>
+            ) : (
+              <>
+                <Totals usage={usage} range={range} />
+                <Limits codex={tokens.codex_limit} claude={claudeLimits} />
+                <Models usage={usage} />
+                <Activity days={tokens.days} />
+              </>
+            )}
+          </div>
 
-      {agents.map((agent) => (
-        <AgentCard key={agent.pid} agent={agent} history={history[agent.pid] ?? []} />
-      ))}
-    </main>
+          <div className="page page-agents">
+            <section className="panel">
+              <div className="row">
+                <h2>Running</h2>
+                <span className="muted small">
+                  {agents.length} agent{agents.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              {snapshot !== null && agents.length === 0 && (
+                <p className="muted">No Claude Code or Codex sessions running.</p>
+              )}
+              <ul className="list">
+                {agents.map((agent) => (
+                  <AgentRow key={agent.pid} agent={agent} history={history[agent.pid] ?? []} status={statusFor(agent)} />
+                ))}
+              </ul>
+            </section>
+            {tokens && <Sessions key={range} sessions={tokens.sessions[range]} reviews={tokens.reviews[range]} statuses={statuses} />}
+          </div>
+        </div>
+
+        <nav className="glass tabbar" aria-label="Pages" ref={tabbarRef}>
+          <span className="pill" ref={tabPill} aria-hidden />
+          {(["overview", "agents"] as Page[]).map((p) => (
+            <button key={p} aria-current={page === p ? "page" : undefined} onClick={() => setPage(p)}>
+              {p === "overview" ? "Overview" : `Agents${agents.length ? ` · ${agents.length}` : ""}`}
+            </button>
+          ))}
+          <span className="rate">{compact(tokens?.tokens_per_sec ?? 0)} tok/s</span>
+        </nav>
+      </main>
+    </>
   );
 }
 
