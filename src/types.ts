@@ -29,9 +29,8 @@ export interface SystemLoad {
   cpu: number;
   memory_used: number;
   memory_total: number;
-  swap_used: number;
-  swap_total: number;
-  swapping: boolean;
+  /** Hottest CPU die sensor in °C; null where the Mac exposes none. */
+  cpu_temp: number | null;
   thermal: Thermal;
 }
 
@@ -131,11 +130,11 @@ export interface ClaudeLimits {
 
 export type Motion = "full" | "subtle" | "off";
 export type TrayStyle = "full" | "compact" | "icon";
+export type Skin = "classic" | "liquid";
 
 export interface Settings {
   sound_enabled: boolean;
   sound: string;
-  dock_bounce: boolean;
   alert_on_done: boolean;
   alert_popup: boolean;
   quiet_hours: boolean;
@@ -145,6 +144,7 @@ export interface Settings {
   show_cost: boolean;
   motion: Motion;
   tray_title: TrayStyle;
+  skin: Skin;
   track_claude: boolean;
   track_codex: boolean;
   claude_limits: boolean;

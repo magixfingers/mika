@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "mika",
+  "productName": "Mika",
   "version": "0.1.0",
   "identifier": "ai.vizzio.mika",
   "build": {
@@ -13,11 +13,12 @@
     "windows": [
       {
         "title": "Mika",
-        "width": 520,
-        "height": 924,
+        "width": 416,
+        "height": 739,
         "minWidth": 360,
         "minHeight": 640,
         "titleBarStyle": "Overlay",
+        "visible": false,
         "hiddenTitle": true
       }
     ],
@@ -27,7 +28,14 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["app", "dmg"],
+    "publisher": "Jon Lee",
+    "copyright": "Copyright © 2026 Jon Lee",
+    "category": "DeveloperTool",
+    "shortDescription": "Watches your AI coding agents from the menu bar.",
+    "macOS": {
+      "signingIdentity": "-"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

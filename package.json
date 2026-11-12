@@ -2,6 +2,7 @@
   "name": "mika",
   "private": true,
   "version": "0.1.0",
+  "author": "Jon Lee",
   "type": "module",
   "scripts": {
     "dev": "vite",

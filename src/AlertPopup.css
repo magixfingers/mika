@@ -8,7 +8,9 @@ body,
   height: 100%;
 }
 
-body {
+/* Only the popup: the main window shares this bundle and needs a transparent
+   body so its backdrop (and the Liquid Glass canvas) shows. */
+html[data-window="alert"] body {
   background: var(--elevated);
   overflow: hidden;
 }

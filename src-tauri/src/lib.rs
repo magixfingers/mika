@@ -19,7 +19,7 @@ use sampler::{AgentKind, Sampler, Snapshot};
 use settings::{Integration, Settings};
 use status::{AgentState, SessionStatus, Tracker};
 use tokens::{TokenScanner, TokenStats};
-use tauri::menu::{Menu, MenuItem};
+use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -35,6 +35,8 @@ const CLAUDE_LIMITS_INTERVAL: Duration = Duration::from_secs(300);
 /// After a failure (e.g. HTTP 429, too many requests), wait longer before retrying.
 const CLAUDE_LIMITS_BACKOFF: Duration = Duration::from_secs(900);
 const TRAY_ID: &str = "mika-tray";
+/// Passed by the login item: start in the menu bar without opening the window.
+const HIDDEN_ARG: &str = "--hidden";
 
 /// The latest snapshot, so a window that opens between samples has data at once.
 #[derive(Default)]
@@ -123,11 +125,6 @@ fn show_alert(app: AppHandle, info: AlertInfo) -> Result<(), String> {
         return Ok(());
     }
     let ring = (settings.sound_enabled && !settings.is_quiet_now()).then(|| settings.sound_path());
-    if settings.dock_bounce
-        && let Some(window) = app.get_webview_window("main")
-    {
-        let _ = window.request_user_attention(Some(tauri::UserAttentionType::Critical));
-    }
     alert::show(&app, info, ring).map_err(|e| e.to_string())
 }
 
@@ -153,9 +150,9 @@ fn current_alert(state: State<'_, AlertState>) -> Option<AlertInfo> {
 }
 
 /// Gets the user's attention when an agent needs them: a sound that needs no
-/// permission, a bouncing Dock icon, and a notification where macOS allows it
-/// (notifications from scripts can be silently blocked, so they are a bonus).
-/// The sound and bounce follow the user's alert settings and quiet hours.
+/// permission and a notification where macOS allows it (notifications from
+/// scripts can be silently blocked, so they are a bonus). The sound follows
+/// the user's alert settings and quiet hours.
 #[tauri::command]
 fn alert(app: AppHandle, title: String, body: String) {
     let settings = current_settings(&app);
@@ -164,11 +161,6 @@ fn alert(app: AppHandle, title: String, body: String) {
         && let Err(err) = std::process::Command::new("afplay").arg(settings.sound_path()).spawn()
     {
         eprintln!("mika: could not play alert sound: {err}");
-    }
-    if settings.dock_bounce
-        && let Some(window) = app.get_webview_window("main")
-    {
-        let _ = window.request_user_attention(Some(tauri::UserAttentionType::Critical));
     }
     let quote = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
     let script = format!("display notification \"{}\" with title \"{}\"", quote(&body), quote(&title));
@@ -235,10 +227,16 @@ fn toggle_main_window(app: &AppHandle) {
         if in_front {
             let _ = window.hide();
         } else {
-            let _ = window.unminimize();
-            let _ = window.show();
-            let _ = window.set_focus();
+            show_main_window(app);
         }
+    }
+}
+
+fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
     }
 }
 
@@ -467,7 +465,7 @@ fn spawn_hook_listener(app: AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![HIDDEN_ARG])))
         .manage(Latest::default())
         .manage(Statuses::default())
         .manage(LatestTokens::default())
@@ -475,13 +473,33 @@ pub fn run() {
         .manage(AlertState::default())
         .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens, claude_limits, alert, log_frontend, get_settings, set_settings, preview_sound, hooks_status, install_hooks, remove_hooks, show_alert, dismiss_alert, open_alert_target, current_alert, focus_app])
         .setup(|app| {
+            // Menu bar only: no Dock icon and no Cmd+Tab entry. Bundled builds
+            // also set LSUIElement (Info.plist) so the Dock icon never flashes.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             let show = MenuItem::with_id(app, "show", "Show Mika", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Mika", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &quit])?;
+            // Mika has no visible app menu (menu bar only), so About lives here.
+            let config = app.config();
+            let about = PredefinedMenuItem::about(
+                app,
+                Some("About Mika"),
+                Some(AboutMetadata {
+                    name: Some("Mika".into()),
+                    version: Some(app.package_info().version.to_string()),
+                    authors: config.bundle.publisher.clone().map(|p| vec![p]),
+                    copyright: config.bundle.copyright.clone(),
+                    ..Default::default()
+                }),
+            )?;
+            let separator = PredefinedMenuItem::separator(app)?;
+            let menu = Menu::with_items(app, &[&show, &about, &separator, &quit])?;
 
             TrayIconBuilder::with_id(TRAY_ID)
-                .icon(app.default_window_icon().cloned().expect("app icon"))
-                .icon_as_template(false)
+                // A template silhouette: macOS tints it to match the menu bar.
+                .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray-icon.png"))?)
+                .icon_as_template(true)
                 .title("Mika")
                 .tooltip("Mika — agent monitor")
                 .menu(&menu)
@@ -503,21 +521,79 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            // The default menu's Quit (Cmd+Q) terminates the process outright:
+            // tao never asks first, so ExitRequested can't stop it. Swap it for
+            // an item that hides Mika to the menu bar; the tray's "Quit Mika"
+            // still quits.
+            #[cfg(target_os = "macos")]
+            {
+                let menu = Menu::default(app.handle())?;
+                if let Some(app_menu) = menu.items()?.first().and_then(|item| item.as_submenu().cloned()) {
+                    // Quit is the last item of the app menu.
+                    let quit_at = app_menu.items()?.len().saturating_sub(1);
+                    app_menu.remove_at(quit_at)?;
+                    app_menu.append(&MenuItem::with_id(app, "hide-to-menu-bar", "Hide to Menu Bar", true, Some("CmdOrCtrl+Q"))?)?;
+                }
+                app.set_menu(menu)?;
+            }
+
+            // The login item stores the path of whichever copy of Mika turned
+            // it on: maybe a dev build or an app that has since moved. Release
+            // builds point it back at themselves so login always opens this app.
+            #[cfg(not(debug_assertions))]
+            {
+                use tauri_plugin_autostart::ManagerExt;
+                let autolaunch = app.autolaunch();
+                if autolaunch.is_enabled().unwrap_or(false)
+                    && let Err(err) = autolaunch.enable()
+                {
+                    eprintln!("mika: could not refresh the login item: {err}");
+                }
+            }
+
             let settings_path = app.path().app_config_dir()?.join("settings.json");
             app.manage(AppSettings { value: Mutex::new(settings::load(&settings_path)), path: settings_path });
+            // The window starts invisible (tauri.conf.json) so a login launch
+            // never flashes it; any other launch shows it now.
+            if !std::env::args().any(|arg| arg == HIDDEN_ARG) {
+                show_main_window(app.handle());
+            }
+
             spawn_sampler(app.handle().clone());
             spawn_hook_listener(app.handle().clone());
             spawn_token_scanner(app.handle().clone());
             spawn_claude_limits(app.handle().clone());
             Ok(())
         })
-        .on_window_event(|window, event| {
-            // Closing the window hides it; Mika keeps running in the menu bar.
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
+        .on_menu_event(|app, event| {
+            if event.id.as_ref() == "hide-to-menu-bar"
+                && let Some(window) = app.get_webview_window("main")
+            {
                 let _ = window.hide();
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .on_window_event(|window, event| {
+            // Closing or minimizing the main window hides it; Mika keeps
+            // running in the menu bar. Tauri has no minimize event, but
+            // minimizing fires a resize.
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                tauri::WindowEvent::Resized(_) if window.label() == "main" && window.is_minimized().unwrap_or(false) => {
+                    let _ = window.hide();
+                }
+                _ => {}
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, _event| {
+            // Opening Mika again (Finder, Spotlight) while it runs shows the window.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _event {
+                show_main_window(_app);
+            }
+        });
 }

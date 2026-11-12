@@ -44,7 +44,7 @@ body {
   /* Transparent: an opaque body would paint over the backdrop layers at z-index -1.
      The canvas color comes from :root. */
   background: transparent;
-  /* No scrollbar: pages are sized to fit (see .pages). */
+  /* No page scrollbar: each page scrolls on its own. */
   overflow: hidden;
 }
 
@@ -80,6 +80,11 @@ html.liquid .backdrop {
   display: none;
 }
 
+/* Classic skin: no WebGPU frame left behind after switching skins. */
+html:not(.liquid) .liquid-canvas {
+  visibility: hidden;
+}
+
 /* --- Glass: only the floating controls --- */
 
 .glass {
@@ -99,6 +104,12 @@ html.liquid .glass {
   box-shadow: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+}
+
+/* Liquid Glass skin: cards are drawn as glass on the canvas too. */
+html.liquid .panel {
+  background: none;
+  border-color: transparent;
 }
 
 /* --- Layout --- */
@@ -764,7 +775,9 @@ h2,
 
 /* --- Settings --- */
 
-.page-settings {
+.page-settings,
+.page-overview,
+.page-agents {
   overflow-y: auto;
 }
 
