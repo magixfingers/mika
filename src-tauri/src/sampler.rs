@@ -110,13 +110,14 @@ impl Sampler {
     }
 }
 
-/// The hottest Apple Silicon CPU die sensor ("PMU tdieN"). The "tdev" sensors
-/// next to them report nonsense (around -9200 °C), so only dies count.
+/// The hottest CPU sensor: the die sensors on Apple Silicon ("PMU tdieN"; the
+/// "tdev" ones next to them report around -9200 °C, so they're skipped), or
+/// the SMC's CPU sensors on Intel Macs.
 fn cpu_temp(components: &mut Components) -> Option<f32> {
     components.refresh(false);
     components
         .iter()
-        .filter(|c| c.label().starts_with("PMU tdie"))
+        .filter(|c| matches!(c.label(), "PECI CPU" | "CPU Proximity") || c.label().starts_with("PMU tdie"))
         .filter_map(|c| c.temperature())
         .filter(|t| (0.0..150.0).contains(t))
         .reduce(f32::max)
