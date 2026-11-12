@@ -21,7 +21,6 @@ pub struct Settings {
     // Alerts
     pub sound_enabled: bool,
     pub sound: String,
-    pub dock_bounce: bool,
     pub alert_on_done: bool,
     /// Pop up a window with a repeating ringtone when an agent needs you.
     pub alert_popup: bool,
@@ -37,6 +36,8 @@ pub struct Settings {
     pub motion: String,
     /// "full", "compact" or "icon".
     pub tray_title: String,
+    /// "classic" (flat, CSS only) or "liquid" (WebGPU glass over a wallpaper).
+    pub skin: String,
     // Data and privacy
     pub track_claude: bool,
     pub track_codex: bool,
@@ -49,7 +50,6 @@ impl Default for Settings {
         Self {
             sound_enabled: true,
             sound: "Glass".into(),
-            dock_bounce: true,
             alert_on_done: false,
             alert_popup: true,
             quiet_hours: false,
@@ -59,6 +59,7 @@ impl Default for Settings {
             show_cost: true,
             motion: "full".into(),
             tray_title: "full".into(),
+            skin: "classic".into(),
             track_claude: true,
             track_codex: true,
             claude_limits: true,
@@ -72,6 +73,9 @@ impl Settings {
     pub fn sanitized(mut self) -> Self {
         if !SOUNDS.contains(&self.sound.as_str()) {
             self.sound = "Glass".into();
+        }
+        if !["classic", "liquid"].contains(&self.skin.as_str()) {
+            self.skin = "classic".into();
         }
         self.sample_interval_ms = self.sample_interval_ms.clamp(500, 10_000);
         self

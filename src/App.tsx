@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { LogicalSize } from "@tauri-apps/api/dpi";
 import type { Agent, AgentState, ClaudeLimits, SessionStatus, Snapshot, TokenStats } from "./types";
 import { Mika, STATE_LABELS } from "./Mika";
 import { Activity, Limits, Models, ProviderMark, providerOf, RangePicker, Sessions, SystemPanel, Totals, usageIn, type Range } from "./Usage";
@@ -175,27 +174,30 @@ function App() {
     setRange(settings.default_range);
   }, [settings]);
 
+  // The Liquid Glass skin runs liquid-dom's WebGPU renderer; Classic is CSS only.
+  const skin = settings?.skin;
   useEffect(() => {
     const canvas = canvasRef.current;
     const main = mainRef.current;
-    if (!canvas || !main) return;
+    if (!canvas || !main || skin !== "liquid") return;
     let stop: (() => void) | null = null;
     let cancelled = false;
     const report = (message: string) => invoke("log_frontend", { message });
     startLiquidGlass(canvas, main, (m) => report(`WebGPU error: ${m}`))
       .then((s) => {
-        // Unmounted while WebGPU was starting.
+        // Unmounted or switched skin while WebGPU was starting.
         if (cancelled) return s?.();
         stop = s;
         document.documentElement.classList.toggle("liquid", s !== null);
-        invoke("log_frontend", { message: s ? "liquid glass running on WebGPU" : "WebGPU unavailable, using CSS glass" });
+        report(s ? "liquid glass running on WebGPU" : "WebGPU unavailable, using the Classic skin");
       })
-      .catch((err) => invoke("log_frontend", { message: `liquid glass failed: ${err}` }));
+      .catch((err) => report(`liquid glass failed: ${err}`));
     return () => {
       cancelled = true;
       stop?.();
+      document.documentElement.classList.remove("liquid");
     };
-  }, []);
+  }, [skin]);
 
   useEffect(() => {
     const apply = (next: Snapshot) => {
@@ -274,21 +276,6 @@ function App() {
     [tokens, range, settings?.track_claude, settings?.track_codex],
   );
 
-  // On first load, grow the window so the whole overview shows without scrolling.
-  const fitted = useRef(false);
-  useEffect(() => {
-    if (fitted.current || tokens === null) return;
-    fitted.current = true;
-    requestAnimationFrame(() => {
-      const page = mainRef.current?.querySelector<HTMLElement>(".page-overview");
-      if (!page) return;
-      const missing = page.scrollHeight - page.clientHeight;
-      if (missing <= 0) return;
-      const height = Math.min(window.innerHeight + missing + 8, window.screen.availHeight - 24);
-      getCurrentWindow().setSize(new LogicalSize(window.innerWidth, height));
-    });
-  }, [tokens]);
-
   return (
     <>
       <div className="backdrop" aria-hidden />
@@ -323,7 +310,7 @@ function App() {
             </div>
           </div>
           <div className="header-controls">
-            <RangePicker value={range} onChange={setRange} />
+            {page !== "settings" && <RangePicker value={range} onChange={setRange} />}
             <button
               className="icon-button"
               onClick={toggleSettings}
@@ -386,7 +373,7 @@ function App() {
           </div>
         </div>
 
-        <nav className="glass tabbar" aria-label="Pages" ref={tabbarRef}>
+        <nav className="tabbar" aria-label="Pages" ref={tabbarRef}>
           <span className="pill" ref={tabPill} aria-hidden />
           {(["overview", "agents"] as const).map((p) => (
             <button key={p} aria-current={page === p ? "page" : undefined} onClick={() => showPage(p)}>

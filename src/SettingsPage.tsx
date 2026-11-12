@@ -147,9 +147,6 @@ export function SettingsPage() {
         <Row label="Popup window" hint="A card on your desktop with a ringtone until you respond, and a button to open the session.">
           <Toggle on={s.alert_popup} onChange={set("alert_popup")} label="Popup window" />
         </Row>
-        <Row label="Bounce Dock icon" hint="Until you switch to Mika.">
-          <Toggle on={s.dock_bounce} onChange={set("dock_bounce")} label="Bounce Dock icon" />
-        </Row>
         <Row label="Alert when an agent finishes" hint="Not just when it needs you.">
           <Toggle on={s.alert_on_done} onChange={set("alert_on_done")} label="Alert when an agent finishes" />
         </Row>
@@ -166,6 +163,14 @@ export function SettingsPage() {
       </Section>
 
       <Section title="Display">
+        <Row label="Skin" hint="Liquid Glass needs WebGPU; without it Mika stays Classic.">
+          <Choice
+            label="Skin"
+            value={s.skin}
+            onChange={set("skin")}
+            options={[["classic", "Classic"], ["liquid", "Liquid Glass"]]}
+          />
+        </Row>
         <Row label="Default range" hint="What Mika shows when it opens.">
           <Choice
             label="Default range"

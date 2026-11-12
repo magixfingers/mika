@@ -52,6 +52,8 @@ export function RangePicker({ value, onChange }: { value: Range; onChange: (r: R
 
 // Thermal pressure as a bar: each step up the OS scale fills another quarter.
 const THERMAL_LEVEL: Record<Thermal, number> = { normal: 0.25, fair: 0.5, serious: 0.75, critical: 1, unknown: 0 };
+// Apple Silicon throttles near 100 °C, so the bar fills toward that.
+const MAX_CPU_TEMP = 100;
 
 function LoadRow({ label, hint, fill, value }: { label: string; hint: string; fill: number; value: React.ReactNode }) {
   return (
@@ -68,7 +70,6 @@ function LoadRow({ label, hint, fill, value }: { label: string; hint: string; fi
 export function SystemPanel({ system }: { system: SystemLoad }) {
   const gb = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)}G`;
   const ram = system.memory_total ? system.memory_used / system.memory_total : 0;
-  const swap = system.swap_total ? system.swap_used / system.swap_total : 0;
   return (
     <section className="panel load">
       <LoadRow label="CPU" hint="Average use across all cores" fill={system.cpu / 100} value={`${Math.round(system.cpu)}%`} />
@@ -79,21 +80,21 @@ export function SystemPanel({ system }: { system: SystemLoad }) {
         value={`${Math.round(ram * 100)}%`}
       />
       <LoadRow
-        label="Swap"
-        hint="Memory paged out to disk; active while it is growing"
-        fill={swap}
+        label="Temp"
+        hint={`Hottest CPU core; macOS thermal pressure is ${system.thermal}. Above normal, the system slows down to cool`}
+        fill={system.cpu_temp !== null ? system.cpu_temp / MAX_CPU_TEMP : THERMAL_LEVEL[system.thermal]}
         value={
           <>
-            <span className={system.swapping ? "warn" : undefined}>{system.swapping ? "active" : "idle"}</span>
-            <span className="muted"> · {gb(system.swap_used)}</span>
+            {system.cpu_temp !== null && <span>{Math.round(system.cpu_temp)}°C</span>}
+            {/* Thermal pressure only shows when it matters, or when there's no sensor. */}
+            {(system.cpu_temp === null || system.thermal !== "normal") && (
+              <span className={system.thermal === "serious" || system.thermal === "critical" ? "warn" : "muted"}>
+                {system.cpu_temp !== null && " · "}
+                {system.thermal}
+              </span>
+            )}
           </>
         }
-      />
-      <LoadRow
-        label="Temp"
-        hint="macOS thermal pressure; above normal, the system slows down to cool"
-        fill={THERMAL_LEVEL[system.thermal]}
-        value={<span className={system.thermal === "serious" || system.thermal === "critical" ? "warn" : "muted"}>{system.thermal}</span>}
       />
     </section>
   );

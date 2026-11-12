@@ -9,11 +9,14 @@ import { autoHideScrollbars } from "./scrollbars";
 
 autoHideScrollbars();
 
+const isAlert = window.location.hash === "#alert";
+if (isAlert) document.documentElement.dataset.window = "alert";
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <SettingsProvider>
       {/* The alert window loads the same bundle at #alert. */}
-      {window.location.hash === "#alert" ? <AlertPopup /> : <App />}
+      {isAlert ? <AlertPopup /> : <App />}
     </SettingsProvider>
   </React.StrictMode>,
 );

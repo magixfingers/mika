@@ -38,7 +38,6 @@ When Claude Code or Codex stops to ask a question or needs your approval, Mika:
 
 - pops up a small card on the screen you're using, showing which agent is waiting, what it wants to do, and for how long,
 - 🔔 rings your chosen sound three times,
-- bounces in your Dock,
 - turns its status red and shows *which* project is waiting.
 
 The card stays until you act on it. Click **Open** (or press Enter) to jump to the app running that session, or **Dismiss** (Escape) to close it. Clicking the red "Needs you" header in Mika also takes you there.
@@ -79,7 +78,7 @@ Live **CPU**, **memory**, **swap** and **temperature** for the whole machine, pl
 
 Open **Settings** from the gear in the top-right corner:
 
-- **Alerts:** sound on or off and which sound, the popup, Dock bounce, alerts when an agent finishes, and quiet hours.
+- **Alerts:** sound on or off and which sound, the popup, alerts when an agent finishes, and quiet hours.
 - **Display:** default range, cost estimates, animation level (full, subtle, off) and the menu bar title style.
 - **Data & privacy:** choose which agents to track, turn Claude limits (and its Keychain and network access) off, and pick an update speed.
 - **Integrations:** install or remove Claude Code and Codex hooks with one click. Your existing file is backed up first.

@@ -1,0 +1,5 @@
+<!-- Menu bar icon: the Mika ghost as a template silhouette (black on
+     transparent, eyes cut out). macOS tints it to match the menu bar. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="4 3 56 56">
+  <path fill="#000" fill-rule="evenodd" d="M32 6c14 0 24 11 24 26v20c0 4-3 6-6 4l-4-3-5 4-5-4-4 4-4-4-5 4-5-4-4 3c-3 2-6 0-6-4V32C8 17 18 6 32 6z M21 30a3 4 0 1 0 6 0a3 4 0 1 0 -6 0z M37 30a3 4 0 1 0 6 0a3 4 0 1 0 -6 0z"/>
+</svg>

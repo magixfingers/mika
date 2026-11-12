@@ -6,7 +6,7 @@ use std::ffi::OsStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
-use sysinfo::{Pid, Process, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+use sysinfo::{Components, Pid, Process, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -61,10 +61,8 @@ pub struct SystemLoad {
     pub cpu: f32,
     pub memory_used: u64,
     pub memory_total: u64,
-    pub swap_used: u64,
-    pub swap_total: u64,
-    /// True while swap use is growing, i.e. memory is being paged out.
-    pub swapping: bool,
+    /// Hottest CPU die sensor in °C; None where the Mac exposes no sensors.
+    pub cpu_temp: Option<f32>,
     pub thermal: Thermal,
 }
 
@@ -77,12 +75,12 @@ pub struct Snapshot {
 
 pub struct Sampler {
     sys: System,
-    last_swap_used: Option<u64>,
+    components: Option<Components>,
 }
 
 impl Sampler {
     pub fn new() -> Result<Self, sysinfo::Error> {
-        Ok(Self { sys: System::new()?, last_swap_used: None })
+        Ok(Self { sys: System::new()?, components: Components::new_with_refreshed_list().ok() })
     }
 
     /// Refreshes process data and builds a snapshot. CPU figures are measured
@@ -100,21 +98,28 @@ impl Sampler {
         );
         self.sys.refresh_cpu_usage();
         self.sys.refresh_memory();
-        let swap_used = self.sys.used_swap();
-        // Ignore tiny jitter; a real page-out moves at least a megabyte.
-        let swapping = self.last_swap_used.is_some_and(|last| swap_used > last + (1 << 20));
-        self.last_swap_used = Some(swap_used);
+        let cpu_temp = self.components.as_mut().and_then(cpu_temp);
         let system = SystemLoad {
             cpu: self.sys.global_cpu_usage(),
             memory_used: self.sys.used_memory(),
             memory_total: self.sys.total_memory(),
-            swap_used,
-            swap_total: self.sys.total_swap(),
-            swapping,
+            cpu_temp,
             thermal: thermal_state(),
         };
         build_snapshot(&self.sys, system)
     }
+}
+
+/// The hottest Apple Silicon CPU die sensor ("PMU tdieN"). The "tdev" sensors
+/// next to them report nonsense (around -9200 °C), so only dies count.
+fn cpu_temp(components: &mut Components) -> Option<f32> {
+    components.refresh(false);
+    components
+        .iter()
+        .filter(|c| c.label().starts_with("PMU tdie"))
+        .filter_map(|c| c.temperature())
+        .filter(|t| (0.0..150.0).contains(t))
+        .reduce(f32::max)
 }
 
 #[cfg(target_os = "macos")]
@@ -428,13 +433,12 @@ mod load_check {
         let l = s.sample().system;
         let gb = |b: u64| b as f64 / 1024f64.powi(3);
         println!(
-            "MIKA cpu={:.1}% ram={:.2}/{:.2}G ({:.0}%) swap={:.2}/{:.2}G thermal={:?}",
+            "MIKA cpu={:.1}% ram={:.2}/{:.2}G ({:.0}%) cpu_temp={:?} thermal={:?}",
             l.cpu,
             gb(l.memory_used),
             gb(l.memory_total),
             l.memory_used as f64 / l.memory_total as f64 * 100.0,
-            gb(l.swap_used),
-            gb(l.swap_total),
+            l.cpu_temp,
             l.thermal
         );
     }
