@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { disable as disableAutostart, enable as enableAutostart, isEnabled as autostartEnabled } from "@tauri-apps/plugin-autostart";
 import { useSettings } from "./settings";
-import type { Settings } from "./types";
+import { DEFAULT_GLASS, type GlassLook, type Settings } from "./types";
 
 const SOUNDS = ["Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"];
 
@@ -44,6 +44,91 @@ function Choice<T extends string | number>({
   );
 }
 
+/** A range slider that previews while dragging and saves on release. */
+function Slider({
+  value,
+  min = 0,
+  max = 100,
+  unit = "%",
+  label,
+  onPreview,
+  onCommit,
+}: {
+  value: number;
+  min?: number;
+  max?: number;
+  unit?: string;
+  label: string;
+  onPreview: (v: number) => void;
+  onCommit: () => void;
+}) {
+  return (
+    <>
+      <input
+        className="range"
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        aria-label={label}
+        onChange={(e) => onPreview(Number(e.target.value))}
+        onPointerUp={onCommit}
+        onKeyUp={onCommit}
+        onBlur={onCommit}
+      />
+      <span className="range-value">
+        {value}
+        {unit}
+      </span>
+    </>
+  );
+}
+
+const GLASS_SLIDERS: { key: Exclude<keyof GlassLook, "backdrop">; label: string; hint: string; max?: number; unit?: string }[] = [
+  { key: "transparency", label: "Transparency", hint: "How much of the backdrop shows through." },
+  { key: "frost", label: "Frost", hint: "Blur behind the glass.", max: 40, unit: " px" },
+  { key: "refraction", label: "Refraction", hint: "How far the edges bend what's behind them." },
+  { key: "shine", label: "Shine", hint: "The light catching the edges." },
+  { key: "shadow", label: "Shadow", hint: "Depth under cards and controls." },
+];
+
+function GlassSettings() {
+  const { settings, update, preview } = useSettings();
+  if (!settings) return null;
+  const look = settings.glass;
+  const save = () => update({ glass: look });
+  const isDefault = (Object.keys(DEFAULT_GLASS) as (keyof GlassLook)[]).every((k) => look[k] === DEFAULT_GLASS[k]);
+  return (
+    <>
+      {GLASS_SLIDERS.map(({ key, label, hint, max, unit }) => (
+        <Row key={key} label={label} hint={hint}>
+          <Slider
+            label={label}
+            value={look[key]}
+            max={max}
+            unit={unit}
+            onPreview={(v) => preview({ glass: { ...look, [key]: v } })}
+            onCommit={save}
+          />
+        </Row>
+      ))}
+      <Row label="Backdrop" hint="The colours behind the glass.">
+        <Choice
+          label="Backdrop"
+          value={look.backdrop}
+          onChange={(backdrop) => update({ glass: { ...look, backdrop } })}
+          options={[["pastel", "Pastel"], ["mono", "Mono"], ["ocean", "Ocean"], ["sunset", "Sunset"]]}
+        />
+      </Row>
+      <Row label="Reset glass" hint="Back to the original look.">
+        <button className="button" disabled={isDefault} onClick={() => update({ glass: DEFAULT_GLASS })}>
+          Reset
+        </button>
+      </Row>
+    </>
+  );
+}
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="panel settings-section">
@@ -52,6 +137,9 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
     </section>
   );
 }
+
+const UPDATE_HINT =
+  "This version of Mika can answer permission requests from its popup. Update the hooks to turn that on; your file is backed up first.";
 
 const HOOK_COPY = {
   claude: {
@@ -69,10 +157,11 @@ const HOOK_COPY = {
 /** An agent's hooks: whether they're installed, with install and remove buttons. */
 function HooksRow({ agent }: { agent: "claude" | "codex" }) {
   const copy = HOOK_COPY[agent];
-  const [installed, setInstalled] = useState<boolean | null>(null);
+  const [status, setStatus] = useState<"installed" | "outdated" | "missing" | null>(null);
+  const installed = status === null ? null : status === "installed";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const refresh = () => invoke<boolean>("hooks_status", { agent }).then(setInstalled).catch((e) => setError(String(e)));
+  const refresh = () => invoke<"installed" | "outdated" | "missing">("hooks_status", { agent }).then(setStatus).catch((e) => setError(String(e)));
   useEffect(() => {
     refresh();
   }, []);
@@ -90,7 +179,7 @@ function HooksRow({ agent }: { agent: "claude" | "codex" }) {
   return (
     <Row
       label={copy.label}
-      hint={error ?? (installed ? copy.on : copy.off)}
+      hint={error ?? (installed ? copy.on : status === "outdated" ? UPDATE_HINT : copy.off)}
     >
       {installed === null ? null : installed ? (
         <button className="button" disabled={busy} onClick={() => run("remove_hooks")}>
@@ -98,7 +187,7 @@ function HooksRow({ agent }: { agent: "claude" | "codex" }) {
         </button>
       ) : (
         <button className="button primary" disabled={busy} onClick={() => run("install_hooks")}>
-          Install
+          {status === "outdated" ? "Update" : "Install"}
         </button>
       )}
     </Row>
@@ -147,6 +236,22 @@ export function SettingsPage() {
         <Row label="Popup window" hint="A card on your desktop with a ringtone until you respond, and a button to open the session.">
           <Toggle on={s.alert_popup} onChange={set("alert_popup")} label="Popup window" />
         </Row>
+        {s.alert_popup && (
+          <Row
+            label="Answer permission requests"
+            hint="Allow or deny right in the popup, without switching to the terminal. Needs the latest hooks below."
+          >
+            <Toggle on={s.answer_from_mika} onChange={set("answer_from_mika")} label="Answer permission requests" />
+          </Row>
+        )}
+        <Row label="Your turn" hint="When an agent has finished and is waiting for your next message. Nothing is blocked, so it never rings or pops up.">
+          <Choice
+            label="Your turn"
+            value={s.turn_alert}
+            onChange={set("turn_alert")}
+            options={[["off", "Off"], ["status", "Show"], ["chime", "Chime"]]}
+          />
+        </Row>
         <Row label="Alert when an agent finishes" hint="Not just when it needs you.">
           <Toggle on={s.alert_on_done} onChange={set("alert_on_done")} label="Alert when an agent finishes" />
         </Row>
@@ -171,6 +276,7 @@ export function SettingsPage() {
             options={[["classic", "Classic"], ["liquid", "Liquid Glass"]]}
           />
         </Row>
+        {s.skin === "liquid" && <GlassSettings />}
         <Row label="Default range" hint="What Mika shows when it opens.">
           <Choice
             label="Default range"

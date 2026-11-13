@@ -5,5 +5,8 @@
   <!-- Menu bar app: no Dock icon, even for the moment before Rust starts. -->
   <key>LSUIElement</key>
   <true/>
+  <!-- Shown when macOS first asks to let Mika control Terminal or iTerm2. -->
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Mika selects the terminal tab of the agent that needs you when you click its alert.</string>
 </dict>
 </plist>

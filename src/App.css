@@ -135,6 +135,9 @@ html.liquid .panel {
   padding: 36px 16px 16px;
   display: grid;
   grid-template-rows: auto 1fr auto;
+  /* One column the window's width: without it, a long header line widens
+     the whole page and the cards and gear run off the right edge. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -183,6 +186,7 @@ html.liquid .panel {
 }
 
 .header-controls {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -231,9 +235,21 @@ html.liquid .panel {
 }
 
 .app-title {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+/* The title side gives way to the controls; a long status ends in "…". */
+.app-title > div {
+  min-width: 0;
+}
+
+.app-title .status-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* An agent is waiting for input: the status line turns red and pulses. */
@@ -921,6 +937,54 @@ h2,
 .button:focus-visible,
 .choice button:focus-visible,
 .toggle:focus-visible,
+/* Sliders: a 2px hairline track and an ink thumb. */
+.range {
+  width: 120px;
+  height: 16px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.range::-webkit-slider-runnable-track {
+  height: 2px;
+  border-radius: 2px;
+  background: var(--hairline);
+}
+
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 2px solid var(--elevated);
+  box-shadow: 0 0 0 1px var(--hairline);
+  transition: transform 150ms ease;
+}
+
+.range:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+
+.range:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.range-value {
+  min-width: 3.4em;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--mute);
+}
+
 .select:focus-visible,
 .time:focus-visible {
   outline: 2px solid var(--link);

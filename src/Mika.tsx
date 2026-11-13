@@ -10,6 +10,7 @@ export const STATE_LABELS: Record<AgentState, string> = {
   done: "Done",
   thinking: "Thinking",
   working: "Working",
+  turn: "Your turn",
   waiting: "Needs you",
 };
 
@@ -132,6 +133,17 @@ const CLIPS: Record<AgentState, Clip[]> = {
         .fromTo(p.exclaim, { ...BODY, opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(3)" }, 0)
         .to(p.exclaim, { opacity: 0, duration: 0.25 }, "+=0.3"),
   ],
+  // Your turn: calm, with a curious look now and then. No alarm.
+  turn: [
+    (p) => tl().to(p.body, { ...BODY, scaleY: 1.03, scaleX: 0.98, duration: 1.4, ease: "sine.inOut", yoyo: true, repeat: 1 }),
+    (p) =>
+      tl()
+        .to(p.body, { ...BODY, rotation: -8, duration: 0.35, ease: "power2.out" })
+        .fromTo(p.question, { ...CENTER, opacity: 0, scale: 0.4, y: 4 }, { opacity: 1, scale: 1, y: 0, duration: 0.35, ease: "back.out(3)" }, "<")
+        .to(p.question, { opacity: 0, y: -4, duration: 0.3 }, "+=1.2")
+        .to(p.body, { rotation: 0, duration: 0.4, ease: "power2.inOut" }, "<"),
+    blink,
+  ],
   done: [
     (p) =>
       tl()
@@ -156,6 +168,7 @@ const REST: Record<AgentState, [number, number]> = {
   working: [0.15, 0.6],
   thinking: [0.3, 0.9],
   waiting: [0.2, 0.6],
+  turn: [1.2, 3],
   done: [0.8, 1.6],
   idle: [1.5, 4],
 };

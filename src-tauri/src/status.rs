@@ -23,6 +23,10 @@ pub enum AgentState {
     Done,
     Thinking,
     Working,
+    /// The agent finished and is waiting for the user's next message. Nothing
+    /// is blocked, so it's calmer than `Waiting`.
+    Turn,
+    /// Blocked until the user answers (a permission prompt or a question).
     Waiting,
 }
 
@@ -48,6 +52,9 @@ pub struct HookEvent {
     pub hook_event_name: String,
     pub cwd: Option<String>,
     pub tool_name: Option<String>,
+    /// Claude Code's reason for a `Notification`, e.g. `permission_prompt` or `idle_prompt`.
+    #[serde(default)]
+    pub notification_type: Option<String>,
 }
 
 fn default_agent() -> &'static str {
@@ -65,9 +72,13 @@ impl Tracker {
             "SessionStart" => (AgentState::Idle, None),
             "UserPromptSubmit" | "PostToolUse" | "PostToolUseFailure" => (AgentState::Thinking, None),
             "PreToolUse" => (AgentState::Working, event.tool_name),
-            // Claude Code asks via Notification; Codex has a dedicated PermissionRequest.
+            // Codex (and Mika's own permission hook) send a dedicated PermissionRequest.
             // Keep the tool name: for an approval request it says what needs approving.
-            "Notification" | "PermissionRequest" => (AgentState::Waiting, event.tool_name),
+            "PermissionRequest" => (AgentState::Waiting, event.tool_name),
+            "Notification" => match notification_state(event.notification_type.as_deref()) {
+                Some(state) => (state, event.tool_name),
+                None => return,
+            },
             "Stop" => (AgentState::Done, None),
             "SessionEnd" => {
                 self.sessions.remove(&event.session_id);
@@ -117,6 +128,19 @@ impl Tracker {
     }
 }
 
+/// What a Claude Code notification says about the session: blocked on the
+/// user, simply the user's turn, or nothing (sign-in results, quota notices…).
+fn notification_state(kind: Option<&str>) -> Option<AgentState> {
+    match kind {
+        // Older Claude Code versions send no type; they only notified to ask.
+        None | Some("permission_prompt" | "elicitation_dialog" | "elicitation_url_dialog" | "agent_needs_input") => {
+            Some(AgentState::Waiting)
+        }
+        Some("idle_prompt") => Some(AgentState::Turn),
+        Some(_) => None,
+    }
+}
+
 pub fn overall(sessions: &[SessionStatus]) -> Option<AgentState> {
     sessions.iter().map(|s| s.state).max()
 }
@@ -128,31 +152,52 @@ pub fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-/// Serves hook posts until the process exits, calling `on_event` for each valid one.
-/// Claude Code posts to `/hook` and Codex to `/hook/codex`; both send the same fields.
-pub fn serve(on_event: impl Fn(HookEvent)) -> std::io::Result<()> {
+/// Serves hook posts until the process exits. Status hooks post to `/hook`
+/// (Claude Code) and `/hook/codex`, and `on_event` gets each valid one.
+/// Permission hooks post to `/permission` and `/permission/codex`; those go to
+/// `on_permission` with the open request, which it must answer itself (the
+/// hook is waiting on that answer).
+pub fn serve(
+    on_event: impl Fn(HookEvent),
+    on_permission: impl Fn(crate::permission::Request, tiny_http::Request),
+) -> std::io::Result<()> {
     let server = tiny_http::Server::http(HOOK_ADDR).map_err(std::io::Error::other)?;
     for mut request in server.incoming_requests() {
-        let agent = match request.url() {
-            "/hook" => Some("claude"),
-            "/hook/codex" => Some("codex"),
+        let route = match request.url() {
+            "/hook" => Some((false, "claude")),
+            "/hook/codex" => Some((false, "codex")),
+            "/permission" => Some((true, "claude")),
+            "/permission/codex" => Some((true, "codex")),
             _ => None,
         };
-        let status = if request.method() != &tiny_http::Method::Post || agent.is_none() {
-            404
-        } else {
-            let mut body = Vec::new();
-            match request.as_reader().take(MAX_BODY).read_to_end(&mut body) {
-                Ok(_) => match serde_json::from_slice::<HookEvent>(&body) {
-                    Ok(mut event) => {
-                        event.agent = agent.unwrap_or("claude");
-                        on_event(event);
-                        204
-                    }
-                    Err(_) => 400,
-                },
-                Err(_) => 400,
+        let Some((is_permission, agent)) = route.filter(|_| request.method() == &tiny_http::Method::Post) else {
+            let _ = request.respond(tiny_http::Response::empty(404));
+            continue;
+        };
+        let mut body = Vec::new();
+        if request.as_reader().take(MAX_BODY).read_to_end(&mut body).is_err() {
+            let _ = request.respond(tiny_http::Response::empty(400));
+            continue;
+        }
+        if is_permission {
+            match serde_json::from_slice::<crate::permission::Request>(&body) {
+                Ok(mut ask) => {
+                    ask.agent = agent;
+                    on_permission(ask, request);
+                }
+                Err(_) => {
+                    let _ = request.respond(tiny_http::Response::empty(400));
+                }
             }
+            continue;
+        }
+        let status = match serde_json::from_slice::<HookEvent>(&body) {
+            Ok(mut event) => {
+                event.agent = agent;
+                on_event(event);
+                204
+            }
+            Err(_) => 400,
         };
         let _ = request.respond(tiny_http::Response::empty(status));
     }
@@ -170,7 +215,27 @@ mod tests {
             hook_event_name: name.into(),
             cwd: Some("/tmp/project".into()),
             tool_name: tool.map(Into::into),
+            notification_type: None,
         }
+    }
+
+    #[test]
+    fn tells_a_blocked_agent_from_an_idle_one() {
+        let mut t = Tracker::default();
+        let mut notify = |kind: &str| {
+            let mut e = event("Notification", None);
+            e.notification_type = Some(kind.into());
+            t.apply(e, 0);
+            t.snapshot(0)[0].state
+        };
+        assert_eq!(notify("idle_prompt"), AgentState::Turn);
+        assert_eq!(notify("permission_prompt"), AgentState::Waiting);
+        assert_eq!(notify("elicitation_dialog"), AgentState::Waiting);
+        // Notices that don't need the user leave the state alone.
+        assert_eq!(notify("auth_success"), AgentState::Waiting);
+        t.apply(event("UserPromptSubmit", None), 1);
+        assert_eq!(t.snapshot(1)[0].state, AgentState::Thinking);
+        assert!(AgentState::Turn < AgentState::Waiting && AgentState::Turn > AgentState::Working);
     }
 
     #[test]

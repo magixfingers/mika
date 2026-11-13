@@ -38,8 +38,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -m 1 -X POST --data-binary @- http://127.0.0.1:47321/hook/codex >/dev/null 2>&1 || true",
-            "timeout": 5
+            "command": "curl -s -m 590 -X POST --data-binary @- http://127.0.0.1:47321/permission/codex 2>/dev/null || true",
+            "timeout": 600
           }
         ]
       }

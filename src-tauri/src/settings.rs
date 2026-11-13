@@ -14,6 +14,45 @@ pub const SOUNDS: [&str; 14] = [
     "Tink",
 ];
 
+/// The Liquid Glass skin's look, as 0–100 sliders (frost is a blur in pixels).
+/// The defaults reproduce the original hand-tuned look.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Glass {
+    /// How much of the backdrop shows through the glass tint.
+    pub transparency: u8,
+    /// Backdrop blur in CSS pixels, 0–40.
+    pub frost: u8,
+    /// Width of the bent edge.
+    pub refraction: u8,
+    /// Strength of the white edge highlight.
+    pub shine: u8,
+    pub shadow: u8,
+    /// The colours behind the glass: "pastel", "mono", "ocean" or "sunset".
+    pub backdrop: String,
+}
+
+pub const BACKDROPS: [&str; 4] = ["pastel", "mono", "ocean", "sunset"];
+
+impl Default for Glass {
+    fn default() -> Self {
+        Self { transparency: 45, frost: 18, refraction: 50, shine: 70, shadow: 50, backdrop: "pastel".into() }
+    }
+}
+
+impl Glass {
+    fn sanitized(mut self) -> Self {
+        for value in [&mut self.transparency, &mut self.refraction, &mut self.shine, &mut self.shadow] {
+            *value = (*value).min(100);
+        }
+        self.frost = self.frost.min(40);
+        if !BACKDROPS.contains(&self.backdrop.as_str()) {
+            self.backdrop = "pastel".into();
+        }
+        self
+    }
+}
+
 /// Every field has a default, so older or partial settings files still load.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -22,8 +61,13 @@ pub struct Settings {
     pub sound_enabled: bool,
     pub sound: String,
     pub alert_on_done: bool,
+    /// When an agent finishes and waits for the next message: "off" (not
+    /// shown), "status" (a calm "Your turn", no sound) or "chime" (also one sound).
+    pub turn_alert: String,
     /// Pop up a window with a repeating ringtone when an agent needs you.
     pub alert_popup: bool,
+    /// Answer permission requests (Allow, Always allow, Deny) in the popup.
+    pub answer_from_mika: bool,
     pub quiet_hours: bool,
     /// Local time, `HH:MM`.
     pub quiet_start: String,
@@ -38,6 +82,7 @@ pub struct Settings {
     pub tray_title: String,
     /// "classic" (flat, CSS only) or "liquid" (WebGPU glass over a wallpaper).
     pub skin: String,
+    pub glass: Glass,
     // Data and privacy
     pub track_claude: bool,
     pub track_codex: bool,
@@ -51,7 +96,9 @@ impl Default for Settings {
             sound_enabled: true,
             sound: "Glass".into(),
             alert_on_done: false,
+            turn_alert: "status".into(),
             alert_popup: true,
+            answer_from_mika: true,
             quiet_hours: false,
             quiet_start: "22:00".into(),
             quiet_end: "08:00".into(),
@@ -60,6 +107,7 @@ impl Default for Settings {
             motion: "full".into(),
             tray_title: "full".into(),
             skin: "classic".into(),
+            glass: Glass::default(),
             track_claude: true,
             track_codex: true,
             claude_limits: true,
@@ -74,10 +122,14 @@ impl Settings {
         if !SOUNDS.contains(&self.sound.as_str()) {
             self.sound = "Glass".into();
         }
+        if !["off", "status", "chime"].contains(&self.turn_alert.as_str()) {
+            self.turn_alert = "status".into();
+        }
         if !["classic", "liquid"].contains(&self.skin.as_str()) {
             self.skin = "classic".into();
         }
         self.sample_interval_ms = self.sample_interval_ms.clamp(500, 10_000);
+        self.glass = self.glass.sanitized();
         self
     }
 
@@ -154,18 +206,27 @@ fn is_mika_group(group: &Value) -> bool {
     group.to_string().contains(HOOK_MARKER)
 }
 
-/// Whether every hook event Mika needs has a Mika entry.
+/// Whether every hook event Mika needs has Mika's current entry. An older
+/// Mika entry counts as missing, so the Integrations section offers to update it.
 pub fn hooks_installed(integration: Integration, settings: &Value) -> bool {
     let ours: Value = serde_json::from_str(integration.template()).unwrap_or_default();
     let Some(events) = ours["hooks"].as_object() else { return false };
-    events.keys().all(|event| {
+    events.iter().all(|(event, groups)| {
+        let wanted = groups.as_array().cloned().unwrap_or_default();
         settings["hooks"][event]
             .as_array()
-            .is_some_and(|groups| groups.iter().any(is_mika_group))
+            .is_some_and(|have| wanted.iter().all(|g| have.contains(g)))
     })
 }
 
-/// Adds Mika's hooks next to any existing ones, without duplicating.
+/// Whether some Mika hook entry is present, current or not.
+pub fn any_mika_hooks(settings: &Value) -> bool {
+    settings["hooks"].as_object().is_some_and(|events| {
+        events.values().filter_map(Value::as_array).flatten().any(is_mika_group)
+    })
+}
+
+/// Adds Mika's hooks next to any existing ones, replacing older Mika entries.
 pub fn with_hooks(integration: Integration, mut settings: Value) -> Value {
     let ours: Value = serde_json::from_str(integration.template()).unwrap_or_default();
     if !settings.is_object() {
@@ -179,9 +240,8 @@ pub fn with_hooks(integration: Integration, mut settings: Value) -> Value {
     if let (Some(hooks), Some(events)) = (hooks.as_object_mut(), ours["hooks"].as_object()) {
         for (event, groups) in events {
             let list = hooks.entry(event.clone()).or_insert_with(|| Value::Array(vec![]));
-            if let Some(list) = list.as_array_mut()
-                && !list.iter().any(is_mika_group)
-            {
+            if let Some(list) = list.as_array_mut() {
+                list.retain(|group| !is_mika_group(group));
                 list.extend(groups.as_array().cloned().unwrap_or_default());
             }
         }
@@ -264,11 +324,34 @@ mod tests {
     }
 
     #[test]
+    fn hooks_upgrade_replaces_an_older_mika_entry() {
+        let old = |url: &str| serde_json::json!([{"hooks": [{"type": "command", "command": format!("curl -s -m 1 {url} || true")}]}]);
+        let mut outdated = with_hooks(Integration::Codex, serde_json::json!({}));
+        outdated["hooks"]["PermissionRequest"] = old("http://127.0.0.1:47321/hook/codex");
+        assert!(!hooks_installed(Integration::Codex, &outdated));
+        let upgraded = with_hooks(Integration::Codex, outdated);
+        assert!(hooks_installed(Integration::Codex, &upgraded));
+        let groups = upgraded["hooks"]["PermissionRequest"].as_array().unwrap();
+        assert_eq!(groups.len(), 1);
+        assert!(groups[0].to_string().contains("/permission/codex"));
+    }
+
+    #[test]
     fn partial_files_and_bad_values_fall_back() {
         let s: Settings = serde_json::from_str(r#"{"sound": "Nope", "sample_interval_ms": 1}"#).unwrap();
         let s = s.sanitized();
         assert_eq!(s.sound, "Glass");
         assert_eq!(s.sample_interval_ms, 500);
         assert!(s.sound_enabled);
+        assert_eq!(s.glass, Glass::default());
+    }
+
+    #[test]
+    fn glass_values_are_clamped() {
+        let s: Settings =
+            serde_json::from_str(r#"{"glass": {"transparency": 250, "frost": 99, "backdrop": "neon"}}"#).unwrap();
+        let g = s.sanitized().glass;
+        assert_eq!((g.transparency, g.frost, g.backdrop.as_str()), (100, 40, "pastel"));
+        assert_eq!(g.shine, Glass::default().shine);
     }
 }

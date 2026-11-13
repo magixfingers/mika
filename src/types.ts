@@ -42,7 +42,9 @@ export interface Snapshot {
 
 // Mirrors src-tauri/src/status.rs.
 
-export type AgentState = "idle" | "done" | "thinking" | "working" | "waiting";
+/** "turn": finished and waiting for the next message (nothing blocked);
+ *  "waiting": blocked until the user answers. */
+export type AgentState = "idle" | "done" | "thinking" | "working" | "turn" | "waiting";
 
 export interface SessionStatus {
   session_id: string;
@@ -131,12 +133,34 @@ export interface ClaudeLimits {
 export type Motion = "full" | "subtle" | "off";
 export type TrayStyle = "full" | "compact" | "icon";
 export type Skin = "classic" | "liquid";
+export type Backdrop = "pastel" | "mono" | "ocean" | "sunset";
+
+/** The Liquid Glass look: 0–100 sliders, except frost (blur in px, 0–40). */
+export interface GlassLook {
+  transparency: number;
+  frost: number;
+  refraction: number;
+  shine: number;
+  shadow: number;
+  backdrop: Backdrop;
+}
+
+export const DEFAULT_GLASS: GlassLook = {
+  transparency: 45,
+  frost: 18,
+  refraction: 50,
+  shine: 70,
+  shadow: 50,
+  backdrop: "pastel",
+};
 
 export interface Settings {
   sound_enabled: boolean;
   sound: string;
   alert_on_done: boolean;
+  turn_alert: "off" | "status" | "chime";
   alert_popup: boolean;
+  answer_from_mika: boolean;
   quiet_hours: boolean;
   quiet_start: string;
   quiet_end: string;
@@ -145,6 +169,7 @@ export interface Settings {
   motion: Motion;
   tray_title: TrayStyle;
   skin: Skin;
+  glass: GlassLook;
   track_claude: boolean;
   track_codex: boolean;
   claude_limits: boolean;
@@ -154,11 +179,22 @@ export interface Settings {
 // Mirrors src-tauri/src/alert.rs.
 
 export interface AlertInfo {
+  kind: "waiting" | "done" | "permission";
   session_id: string;
   agent: string;
   title: string;
   body: string;
   tool: string | null;
   host_app: string | null;
+  /** The agent process, used to find its exact terminal tab. */
+  pid: number | null;
   since_ms: number;
+  /** Set for a permission request the popup can answer. */
+  request_id: number | null;
+  /** What the agent wants to run: the command, file or URL. */
+  detail: string | null;
+  /** Whether "Always allow" has a rule to save (Claude Code only). */
+  can_always: boolean;
 }
+
+export type PermissionChoice = "allow" | "always" | "deny" | "terminal";

@@ -49,6 +49,19 @@ html[data-window="alert"] body {
   color: var(--error);
 }
 
+.alert-card[data-kind="permission"] {
+  gap: 10px;
+}
+
+.alert-card[data-kind="done"] .alert-label {
+  color: var(--body);
+}
+
+.alert-card[data-kind="done"] .alert-dot {
+  background: var(--body);
+  animation: none;
+}
+
 .alert-dot {
   width: 6px;
   height: 6px;
@@ -74,6 +87,7 @@ html[data-window="alert"] body {
 }
 
 .alert-head {
+  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -124,7 +138,56 @@ html[data-window="alert"] body {
 .alert-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 6px;
+}
+
+.alert-spacer {
+  flex: 1;
+}
+
+/* What the agent wants to run, in mono, clamped to three lines. */
+.alert-detail {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--canvas);
+  transition: border-color 150ms ease;
+}
+
+.alert-detail code {
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--ink);
+  word-break: break-all;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.alert-detail[data-risky] {
+  border-color: var(--error);
+}
+
+.alert-risk {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--error);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.6;
+  text-transform: uppercase;
+  color: #fff;
 }
 
 /* Pills, like the range switch and tab bar. */
@@ -144,6 +207,19 @@ html[data-window="alert"] body {
 
 .alert-button:hover {
   color: var(--ink);
+}
+
+.alert-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Hands the request back to the agent's own prompt: quieter than the answers. */
+.alert-button.ghost {
+  padding: 0 4px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--mute);
 }
 
 .alert-button.primary {

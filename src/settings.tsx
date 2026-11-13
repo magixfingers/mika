@@ -6,9 +6,11 @@ import type { Settings } from "./types";
 type SettingsApi = {
   settings: Settings | null;
   update: (patch: Partial<Settings>) => Promise<void>;
+  /** Shows a change right away without saving it (e.g. while dragging a slider). */
+  preview: (patch: Partial<Settings>) => void;
 };
 
-const SettingsContext = createContext<SettingsApi>({ settings: null, update: async () => {} });
+const SettingsContext = createContext<SettingsApi>({ settings: null, update: async () => {}, preview: () => {} });
 
 /** Loads settings from Rust, keeps them in sync, and saves changes through `update`. */
 export function SettingsProvider({ children }: { children: ReactNode }) {
@@ -37,7 +39,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [settings],
   );
 
-  return <SettingsContext.Provider value={{ settings, update }}>{children}</SettingsContext.Provider>;
+  const preview = useCallback((patch: Partial<Settings>) => {
+    setSettings((current) => (current ? { ...current, ...patch } : current));
+  }, []);
+
+  return <SettingsContext.Provider value={{ settings, update, preview }}>{children}</SettingsContext.Provider>;
 }
 
 export const useSettings = () => useContext(SettingsContext);

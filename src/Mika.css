@@ -13,6 +13,11 @@
   --mika-color: var(--alert);
 }
 
+/* Your turn: calm violet, not the red of an agent that's blocked. */
+.mika-turn {
+  --mika-color: var(--violet);
+}
+
 .mika-done {
   --mika-color: var(--cyan);
 }
