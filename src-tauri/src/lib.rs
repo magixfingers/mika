@@ -1,5 +1,6 @@
 mod alert;
 mod claude_limits;
+mod permission;
 mod sampler;
 mod settings;
 mod status;
@@ -13,11 +14,12 @@ use std::time::{Duration, Instant};
 
 use notify::{RecursiveMode, Watcher};
 
-use alert::{AlertInfo, AlertState};
+use alert::{AlertInfo, AlertKind, AlertState};
 use claude_limits::ClaudeLimits;
+use permission::{Choice, Permissions};
 use sampler::{AgentKind, Sampler, Snapshot};
 use settings::{Integration, Settings};
-use status::{AgentState, SessionStatus, Tracker};
+use status::{AgentState, HookEvent, SessionStatus, Tracker};
 use tokens::{TokenScanner, TokenStats};
 use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -97,10 +99,18 @@ fn preview_sound(name: String) {
     }
 }
 
+/// "installed", "outdated" (an older Mika version's hooks) or "missing".
 #[tauri::command]
-fn hooks_status(app: AppHandle, agent: Integration) -> Result<bool, String> {
+fn hooks_status(app: AppHandle, agent: Integration) -> Result<&'static str, String> {
     let home = app.path().home_dir().map_err(|e| e.to_string())?;
-    Ok(settings::hooks_installed(agent, &settings::read_hooks_file(agent, &home)))
+    let file = settings::read_hooks_file(agent, &home);
+    Ok(if settings::hooks_installed(agent, &file) {
+        "installed"
+    } else if settings::any_mika_hooks(&file) {
+        "outdated"
+    } else {
+        "missing"
+    })
 }
 
 #[tauri::command]
@@ -128,20 +138,44 @@ fn show_alert(app: AppHandle, info: AlertInfo) -> Result<(), String> {
     alert::show(&app, info, ring).map_err(|e| e.to_string())
 }
 
-/// Brings the app running a session to the front (from the header or a row).
+/// Brings an agent's session to the front (from the header or a row): its
+/// terminal tab when it can be found, otherwise the app hosting it.
 #[tauri::command]
-fn focus_app(path: String) -> bool {
-    alert::focus_app(&path)
+fn focus_app(path: String, pid: Option<u32>) {
+    thread::spawn(move || {
+        alert::focus_agent(Some(&path), pid);
+    });
 }
 
+/// Dismissing a permission request hands it back to the agent's own prompt.
 #[tauri::command]
 fn dismiss_alert(app: AppHandle) {
-    alert::dismiss(&app);
+    match app.state::<AlertState>().permission().and_then(|a| a.request_id) {
+        Some(id) => answer_permission(app, id, Choice::Terminal),
+        None => alert::dismiss(&app),
+    }
 }
 
+/// Goes to the session; for a permission request, hands it back to the
+/// agent's prompt there.
 #[tauri::command]
 fn open_alert_target(app: AppHandle) {
-    alert::open_target(&app);
+    let Some(asking) = app.state::<AlertState>().permission() else {
+        alert::open_target(&app);
+        return;
+    };
+    if let Some(id) = asking.request_id {
+        answer_permission(app, id, Choice::Terminal);
+    }
+    thread::spawn(move || {
+        alert::focus_agent(asking.host_app.as_deref(), asking.pid);
+    });
+}
+
+/// The user's answer to a permission request, from the popup.
+#[tauri::command]
+fn answer_permission(app: AppHandle, id: u64, choice: Choice) {
+    app.state::<Permissions>().answer(id, choice);
 }
 
 #[tauri::command]
@@ -179,8 +213,8 @@ fn latest_tokens(latest: State<'_, LatestTokens>) -> Option<TokenStats> {
 }
 
 #[tauri::command]
-fn session_statuses(statuses: State<'_, Statuses>) -> Vec<SessionStatus> {
-    statuses.0.lock().map(|mut t| t.snapshot(status::now_ms())).unwrap_or_default()
+fn session_statuses(app: AppHandle) -> Vec<SessionStatus> {
+    visible_statuses(&app).unwrap_or_default()
 }
 
 fn state_glyph(state: AgentState) -> &'static str {
@@ -189,6 +223,7 @@ fn state_glyph(state: AgentState) -> &'static str {
         AgentState::Done => "✓",
         AgentState::Thinking => "◌",
         AgentState::Working => "●",
+        AgentState::Turn => "◇",
         AgentState::Waiting => "◆",
     }
 }
@@ -263,11 +298,20 @@ fn spawn_sampler(app: AppHandle) {
 }
 
 /// Emits the current session statuses and refreshes the tray title.
+/// Every session's status as the user sees it: with "your turn" turned off,
+/// a session waiting for its next message just shows as idle.
+fn visible_statuses(app: &AppHandle) -> Option<Vec<SessionStatus>> {
+    let mut sessions = app.state::<Statuses>().0.lock().ok()?.snapshot(status::now_ms());
+    if current_settings(app).turn_alert == "off" {
+        for s in sessions.iter_mut().filter(|s| s.state == AgentState::Turn) {
+            s.state = AgentState::Idle;
+        }
+    }
+    Some(sessions)
+}
+
 fn publish_statuses(app: &AppHandle) {
-    let sessions = match app.state::<Statuses>().0.lock() {
-        Ok(mut tracker) => tracker.snapshot(status::now_ms()),
-        Err(_) => return,
-    };
+    let Some(sessions) = visible_statuses(app) else { return };
     let _ = app.emit("statuses", &sessions);
     let title = match app.state::<Latest>().0.lock() {
         Ok(latest) => latest.as_ref().map(|s| tray_title(s, status::overall(&sessions), &current_settings(app).tray_title)),
@@ -394,38 +438,61 @@ fn alert_on_change(app: &AppHandle, before: Option<AgentState>, now: &SessionSta
     }
     let label = if now.agent == "codex" { "Codex" } else { "Claude Code" };
     let folder = short_path(now.cwd.as_deref());
-    match now.state {
-        AgentState::Waiting => {
-            let info = AlertInfo {
-                session_id: now.session_id.clone(),
-                agent: now.agent.to_string(),
-                title: format!("{label} needs you"),
-                body: folder,
-                tool: now.tool.clone(),
-                host_app: host_app_for(app, now),
-                since_ms: now.since_ms,
-            };
-            if let Err(err) = show_alert(app.clone(), info) {
-                eprintln!("mika: alert popup failed: {err}");
+    let (host_app, pid) = host_for(app, now.agent, now.cwd.as_deref()).unzip();
+    let info = |kind, title: String, body: String| AlertInfo {
+        kind,
+        session_id: now.session_id.clone(),
+        agent: now.agent.to_string(),
+        title,
+        body,
+        tool: now.tool.clone(),
+        host_app: host_app.clone().flatten(),
+        pid,
+        since_ms: now.since_ms,
+        request_id: None,
+        detail: None,
+        can_always: false,
+    };
+    let busy = app.state::<AlertState>().waiting_on_other(&now.session_id);
+    let result = match now.state {
+        // Nothing is blocked: at most one chime, never the popup.
+        AgentState::Turn => {
+            if settings.turn_alert == "chime" && settings.sound_enabled && !settings.is_quiet_now() {
+                let _ = std::process::Command::new("afplay").arg(settings.sound_path()).spawn();
             }
+            Ok(())
+        }
+        // Never cover a popup still waiting on an answer for another session.
+        AgentState::Waiting if busy => {
+            alert(app.clone(), format!("{label} needs you"), folder);
+            Ok(())
+        }
+        AgentState::Waiting => show_alert(app.clone(), info(AlertKind::Waiting, format!("{label} needs you"), folder)),
+        AgentState::Done if settings.alert_on_done && !busy => {
+            show_alert(app.clone(), info(AlertKind::Done, format!("{label} finished"), folder))
         }
         AgentState::Done if settings.alert_on_done => {
             alert(app.clone(), "Mika · an agent finished".into(), format!("{label} in {folder} is done."));
+            Ok(())
         }
-        _ => {}
+        _ => Ok(()),
+    };
+    if let Err(err) = result {
+        eprintln!("mika: alert popup failed: {err}");
     }
 }
 
-/// The app running a session's agent, matched like the window does.
-fn host_app_for(app: &AppHandle, session: &SessionStatus) -> Option<String> {
+/// The agent process running a session and the app hosting it, matched like
+/// the window does.
+fn host_for(app: &AppHandle, agent: &str, cwd: Option<&str>) -> Option<(Option<String>, u32)> {
     let latest = app.state::<Latest>();
     let snapshot = latest.0.lock().ok()?;
     snapshot.as_ref()?.agents.iter().find_map(|a| {
         let same = match a.kind {
-            AgentKind::Codex => session.agent == "codex",
-            AgentKind::Claude => session.agent == "claude" && a.cwd == session.cwd,
+            AgentKind::Codex => agent == "codex",
+            AgentKind::Claude => agent == "claude" && a.cwd.as_deref() == cwd,
         };
-        if same { a.host_app.clone() } else { None }
+        same.then(|| (a.host_app.clone(), a.pid))
     })
 }
 
@@ -441,24 +508,122 @@ fn short_path(path: Option<&str>) -> String {
     }
 }
 
+/// Applies a hook event to the session tracker, returning the session's state
+/// before and its status after.
+fn track(app: &AppHandle, event: HookEvent) -> Option<(Option<AgentState>, Option<SessionStatus>)> {
+    let id = event.session_id.clone();
+    let change = app.state::<Statuses>().0.lock().ok().map(|mut tracker| {
+        let before = tracker.get(&id).map(|s| s.state);
+        tracker.apply(event, status::now_ms());
+        (before, tracker.get(&id).cloned())
+    });
+    publish_statuses(app);
+    change
+}
+
 fn spawn_hook_listener(app: AppHandle) {
     thread::spawn(move || {
-        let result = status::serve(|event| {
-            let id = event.session_id.clone();
-            let change = app.state::<Statuses>().0.lock().ok().map(|mut tracker| {
-                let before = tracker.get(&id).map(|s| s.state);
-                tracker.apply(event, status::now_ms());
-                (before, tracker.get(&id).cloned())
-            });
-            publish_statuses(&app);
-            if let Some((before, Some(now))) = change {
-                alert_on_change(&app, before, &now);
-            }
-        });
+        let result = status::serve(
+            |event| {
+                if let Some((before, Some(now))) = track(&app, event) {
+                    alert_on_change(&app, before, &now);
+                }
+            },
+            |ask, request| handle_permission(&app, ask, request),
+        );
         if let Err(err) = result {
             eprintln!("mika: hook listener on {} unavailable: {err}", status::HOOK_ADDR);
         }
     });
+}
+
+/// A permission request from an agent's hook. The session shows as waiting
+/// either way; when the user lets Mika answer, the popup asks and the hook's
+/// HTTP request stays open until they choose (on its own thread, so other
+/// hooks keep flowing). Otherwise it's answered with nothing at once, and the
+/// agent asks in the terminal as usual.
+fn handle_permission(app: &AppHandle, ask: permission::Request, request: tiny_http::Request) {
+    let waiting = HookEvent {
+        agent: ask.agent,
+        session_id: ask.session_id.clone(),
+        hook_event_name: "PermissionRequest".into(),
+        cwd: ask.cwd.clone(),
+        tool_name: Some(ask.tool_name.clone()),
+        notification_type: None,
+    };
+    let change = track(app, waiting);
+    let settings = current_settings(app);
+    let tracked = if ask.agent == "codex" { settings.track_codex } else { settings.track_claude };
+    if !(tracked && settings.alert_popup && settings.answer_from_mika) {
+        let _ = request.respond(tiny_http::Response::empty(204));
+        if let Some((before, Some(now))) = change {
+            alert_on_change(app, before, &now);
+        }
+        return;
+    }
+
+    let (reply, choice) = mpsc::channel();
+    let id = app.state::<Permissions>().add(ask.clone(), reply);
+    // One request at a time; the others wait their turn in the queue.
+    if app.state::<AlertState>().permission().is_none() {
+        show_permission(app, id, &ask);
+    }
+    let app = app.clone();
+    thread::spawn(move || {
+        let choice = choice.recv_timeout(permission::WAIT).unwrap_or(Choice::Terminal);
+        app.state::<Permissions>().remove(id);
+        let response = match permission::decision_json(choice, &ask) {
+            Some(json) => tiny_http::Response::from_string(json)
+                .with_header(tiny_http::Header::from_bytes("Content-Type", "application/json").expect("valid header"))
+                .boxed(),
+            None => tiny_http::Response::empty(204).boxed(),
+        };
+        if let Err(err) = request.respond(response) {
+            eprintln!("mika: could not answer the permission hook: {err}");
+        }
+        // Answered here: the agent carries on, so it's no longer waiting.
+        if choice != Choice::Terminal {
+            track(&app, HookEvent {
+                agent: ask.agent,
+                session_id: ask.session_id.clone(),
+                hook_event_name: "PostToolUse".into(),
+                cwd: None,
+                tool_name: None,
+                notification_type: None,
+            });
+        }
+        let showing = app.state::<AlertState>().permission().and_then(|a| a.request_id);
+        if showing == Some(id) {
+            match app.state::<Permissions>().oldest() {
+                Some((next, next_ask)) => show_permission(&app, next, &next_ask),
+                None => alert::dismiss(&app),
+            }
+        }
+    });
+}
+
+fn show_permission(app: &AppHandle, id: u64, ask: &permission::Request) {
+    let settings = current_settings(app);
+    let label = if ask.agent == "codex" { "Codex" } else { "Claude Code" };
+    let (host_app, pid) = host_for(app, ask.agent, ask.cwd.as_deref()).unzip();
+    let info = AlertInfo {
+        kind: AlertKind::Permission,
+        session_id: ask.session_id.clone(),
+        agent: ask.agent.to_string(),
+        title: format!("{label} wants to use {}", ask.tool_name),
+        body: short_path(ask.cwd.as_deref()),
+        tool: Some(ask.tool_name.clone()),
+        host_app: host_app.flatten(),
+        pid,
+        since_ms: status::now_ms(),
+        request_id: Some(id),
+        detail: Some(permission::detail(ask)).filter(|d| !d.is_empty()),
+        can_always: permission::can_always(ask),
+    };
+    let ring = (settings.sound_enabled && !settings.is_quiet_now()).then(|| settings.sound_path());
+    if let Err(err) = alert::show(app, info, ring) {
+        eprintln!("mika: permission popup failed: {err}");
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -471,7 +636,8 @@ pub fn run() {
         .manage(LatestTokens::default())
         .manage(LatestClaudeLimits::default())
         .manage(AlertState::default())
-        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens, claude_limits, alert, log_frontend, get_settings, set_settings, preview_sound, hooks_status, install_hooks, remove_hooks, show_alert, dismiss_alert, open_alert_target, current_alert, focus_app])
+        .manage(Permissions::default())
+        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens, claude_limits, alert, log_frontend, get_settings, set_settings, preview_sound, hooks_status, install_hooks, remove_hooks, show_alert, dismiss_alert, open_alert_target, current_alert, focus_app, answer_permission])
         .setup(|app| {
             // Menu bar only: no Dock icon and no Cmd+Tab entry. Bundled builds
             // also set LSUIElement (Info.plist) so the Dock icon never flashes.

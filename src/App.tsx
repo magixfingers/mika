@@ -6,7 +6,7 @@ import type { Agent, AgentState, ClaudeLimits, SessionStatus, Snapshot, TokenSta
 import { Mika, STATE_LABELS } from "./Mika";
 import { Activity, Limits, Models, ProviderMark, providerOf, RangePicker, Sessions, SystemPanel, Totals, usageIn, type Range } from "./Usage";
 import { compact, formatBytes, formatUptime, shortPath } from "./format";
-import { startLiquidGlass } from "./liquid";
+import { startLiquidGlass, type LiquidGlass } from "./liquid";
 import { useEntrance, usePop, useShake, useSlidingPill } from "./motion";
 import { useSettings } from "./settings";
 import { SettingsPage } from "./SettingsPage";
@@ -16,7 +16,7 @@ import "./App.css";
 const HISTORY_LENGTH = 300;
 
 // Most urgent last, matching AgentState's order in status.rs.
-const URGENCY: AgentState[] = ["idle", "done", "thinking", "working", "waiting"];
+const URGENCY: AgentState[] = ["idle", "done", "thinking", "working", "turn", "waiting"];
 
 function mostUrgent(statuses: SessionStatus[]): SessionStatus | null {
   return statuses.reduce<SessionStatus | null>(
@@ -176,28 +176,36 @@ function App() {
 
   // The Liquid Glass skin runs liquid-dom's WebGPU renderer; Classic is CSS only.
   const skin = settings?.skin;
+  const glassLook = settings?.glass;
+  const lookRef = useRef(glassLook);
+  lookRef.current = glassLook;
+  const glassRef = useRef<LiquidGlass | null>(null);
   useEffect(() => {
     const canvas = canvasRef.current;
     const main = mainRef.current;
     if (!canvas || !main || skin !== "liquid") return;
-    let stop: (() => void) | null = null;
     let cancelled = false;
     const report = (message: string) => invoke("log_frontend", { message });
-    startLiquidGlass(canvas, main, (m) => report(`WebGPU error: ${m}`))
-      .then((s) => {
+    startLiquidGlass(canvas, main, (m) => report(`WebGPU error: ${m}`), lookRef.current)
+      .then((glass) => {
         // Unmounted or switched skin while WebGPU was starting.
-        if (cancelled) return s?.();
-        stop = s;
-        document.documentElement.classList.toggle("liquid", s !== null);
-        report(s ? "liquid glass running on WebGPU" : "WebGPU unavailable, using the Classic skin");
+        if (cancelled) return glass?.stop();
+        glassRef.current = glass;
+        document.documentElement.classList.toggle("liquid", glass !== null);
+        report(glass ? "liquid glass running on WebGPU" : "WebGPU unavailable, using the Classic skin");
       })
       .catch((err) => report(`liquid glass failed: ${err}`));
     return () => {
       cancelled = true;
-      stop?.();
+      glassRef.current?.stop();
+      glassRef.current = null;
       document.documentElement.classList.remove("liquid");
     };
   }, [skin]);
+  // Slider changes restyle the running renderer; no restart needed.
+  useEffect(() => {
+    if (glassLook) glassRef.current?.setLook(glassLook);
+  }, [glassLook]);
 
   useEffect(() => {
     const apply = (next: Snapshot) => {
@@ -244,8 +252,8 @@ function App() {
   };
   // The app hosting a session: Codex threads all live in the ChatGPT app's one agent;
   // Claude sessions are matched to their agent by folder.
-  const hostFor = (s: SessionStatus) =>
-    agents.find((a) => a.kind === s.agent && (s.agent === "codex" || a.cwd === s.cwd))?.host_app ?? null;
+  const agentFor = (s: SessionStatus) =>
+    agents.find((a) => a.kind === s.agent && (s.agent === "codex" || a.cwd === s.cwd)) ?? null;
   const tokensFlowing = (tokens?.tokens_per_sec ?? 0) > 0;
   const overall = mostUrgent([
     ...statuses,
@@ -253,11 +261,14 @@ function App() {
     ...(tokensFlowing ? [inferredWorking("tokens", "claude", null, "tokens flowing")] : []),
   ]);
   const alerting = overall?.state === "waiting";
-  // The app running the waiting session, so clicking the red header goes straight there.
-  const waitingHost = alerting && overall ? hostFor(overall) : null;
+  // Blocked ("Needs you", red) or just the user's turn (calm): either way the
+  // header names the folder and clicking it goes straight to the session.
+  const yourMove = alerting || overall?.state === "turn";
+  const waitingAgent = yourMove && overall ? agentFor(overall) : null;
+  const waitingHost = waitingAgent?.host_app ?? null;
   const openWaitingSession = () => {
     if (!waitingHost) return;
-    invoke("focus_app", { path: waitingHost });
+    invoke("focus_app", { path: waitingHost, pid: waitingAgent?.pid ?? null });
     invoke("dismiss_alert");
   };
 
@@ -287,11 +298,11 @@ function App() {
           <div
             className="app-title"
             data-alert={alerting || undefined}
-            data-clickable={alerting && waitingHost ? "" : undefined}
+            data-clickable={waitingHost ? "" : undefined}
             ref={titleRef}
-            role={alerting && waitingHost ? "button" : undefined}
-            tabIndex={alerting && waitingHost ? 0 : undefined}
-            title={alerting && waitingHost ? `Open in ${appName(waitingHost)}` : undefined}
+            role={waitingHost ? "button" : undefined}
+            tabIndex={waitingHost ? 0 : undefined}
+            title={waitingHost ? `Open in ${appName(waitingHost)}` : undefined}
             onClick={openWaitingSession}
             onKeyDown={(e) => e.key === "Enter" && openWaitingSession()}
           >
@@ -302,8 +313,8 @@ function App() {
               <h1>Mika</h1>
               <p className="muted small status-line" role={alerting ? "alert" : undefined}>
                 {overall
-                  ? alerting
-                    ? `Needs you · ${shortPath(overall.cwd)}`
+                  ? yourMove
+                    ? `${STATE_LABELS[overall.state]} · ${shortPath(overall.cwd)}`
                     : describe(overall)
                   : "Watching for agents"}
               </p>

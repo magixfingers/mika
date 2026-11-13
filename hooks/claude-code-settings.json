@@ -42,6 +42,17 @@
         ]
       }
     ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -m 590 -X POST --data-binary @- http://127.0.0.1:47321/permission 2>/dev/null || true",
+            "timeout": 600
+          }
+        ]
+      }
+    ],
     "Notification": [
       {
         "hooks": [
