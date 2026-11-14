@@ -7,7 +7,11 @@ Mika is a macOS menu bar application that observes Claude Code and Codex session
 The system has two parts. A Rust core, hosted by Tauri 2, is authoritative for data acquisition, session state and alert decisions. A React and TypeScript window is authoritative for presentation only.
 
 <p align="center">
-  <img src="docs/screenshots/carousel.svg" width="280" alt="Mika's main window, cycling through three screens: Overview, with machine load, today's tokens, plan limits, models and activity; Agents, with running agents and sessions; and Settings, with alert and display options.">
+  <img src="docs/screenshots/overview.webp" width="31%" alt="Overview: machine load, today's tokens and estimated cost, plan limits, models, and the activity heatmap and trend.">
+  &nbsp;
+  <img src="docs/screenshots/agents.webp" width="31%" alt="Agents: the running agents with their load, and the session list with tokens, cost, calls and cache rate.">
+  &nbsp;
+  <img src="docs/screenshots/settings.webp" width="31%" alt="Settings: alert sound, popup, answering permission requests, quiet hours, and the Liquid Glass skin controls.">
 </p>
 
 **Contents:** [System overview](#system-overview) · [Capabilities](#capabilities) · [Installation and integration](#installation-and-integration) · [Architecture](#architecture) · [Runtime behaviour](#runtime-behaviour) · [Presentation layer](#presentation-layer) · [Interface reference](#interface-reference) · [Trust boundaries and privacy](#trust-boundaries-and-privacy) · [Development](#development) · [Known limitations](#known-limitations)
