@@ -277,7 +277,8 @@ function App() {
   const titleRef = useShake<HTMLDivElement>(alerting);
   const tabbarRef = useRef<HTMLElement>(null);
   const tabPill = useSlidingPill(tabbarRef, '[aria-current="page"]', page);
-  useEntrance(mainRef, ".totals, .panel", `${page}:${tokens !== null}`);
+  // Replays on each page or range switch, and once when the first data arrives.
+  useEntrance(mainRef, ".totals, .panel", `${page}:${range}:${tokens !== null}`);
 
   // Alerts (the popup, its ringtone and "agent finished") fire from the Rust core
   // when a hook arrives, so they work even while this window is hidden.

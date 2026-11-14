@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { ClaudeLimits, DayUsage, ReviewSummary, SystemLoad, Thermal, ModelUsage, Provider, RateLimit, SessionStatus, SessionUsage } from "./types";
 import { Mika, STATE_LABELS } from "./Mika";
 import { CLAUDE_LOGO, OPENAI_LOGO } from "./logos";
-import { useRollingNumber, useSlidingPill } from "./motion";
+import { fadeAway, glideTo, springScale, useRollingNumber, useSlidingPill } from "./motion";
 import { useSettings } from "./settings";
 import { compact, formatCost, localDate, timeUntil } from "./format";
 
@@ -446,14 +446,14 @@ export function Activity({ days }: { days: DayUsage[] }) {
   const start = new Date(today.getFullYear(), 0, 1);
   start.setDate(start.getDate() - start.getDay());
   const weeks = Math.floor((today.getTime() - start.getTime()) / (7 * 86400000)) + 1;
-  const cells: { date: string; tokens: number; hidden: boolean }[] = [];
+  const cells: { date: Date; tokens: number; hidden: boolean }[] = [];
   const monthStarts: { month: number; week: number }[] = [];
   for (let i = 0; i < weeks * 7; i++) {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
     if (d.getDate() === 1) monthStarts.push({ month: d.getMonth(), week: Math.floor(i / 7) });
     const date = localDate(d);
-    cells.push({ date, tokens: totals.get(date) ?? 0, hidden: d > today || d.getFullYear() !== today.getFullYear() });
+    cells.push({ date: d, tokens: totals.get(date) ?? 0, hidden: d > today || d.getFullYear() !== today.getFullYear() });
   }
   const max = Math.max(1, ...cells.map((c) => c.tokens));
   const active = [...totals.values()].filter((t) => t > 0).length;
@@ -468,26 +468,66 @@ export function Activity({ days }: { days: DayUsage[] }) {
   const peak = Math.max(0, ...trend.map((t) => t.tokens));
   const W = 300;
   const H = 80;
-  const path = smoothPath(
-    trend.map((t, i) => [(i / (TREND_DAYS - 1)) * W, H - 6 - (peak ? (t.tokens / peak) * (H - 12) : 0)]),
-  );
+  const points = trend.map((t, i): [number, number] => [
+    (i / (TREND_DAYS - 1)) * W,
+    H - 6 - (peak ? (t.tokens / peak) * (H - 12) : 0),
+  ]);
+  const path = smoothPath(points);
   const md = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+  const day = (d: Date) => `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+
+  // Hovering either chart swaps its header figure for that day's.
+  const [cellHover, setCellHover] = useState<number | null>(null);
+  const [trendHover, setTrendHover] = useState<number | null>(null);
+  const cursor = useRef<HTMLSpanElement>(null);
+  const dot = useRef<HTMLSpanElement>(null);
+
+  const overCell = (e: React.PointerEvent, entering: boolean) => {
+    const cell = (e.target as HTMLElement).closest<HTMLElement>(".cell:not([data-hidden])");
+    if (!cell) return;
+    springScale(cell, entering ? 1.7 : 1);
+    if (entering) setCellHover(Number(cell.dataset.i));
+  };
+  const scrub = (e: React.PointerEvent<HTMLDivElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    const i = Math.min(TREND_DAYS - 1, Math.max(0, Math.round(((e.clientX - box.left) / box.width) * (TREND_DAYS - 1))));
+    setTrendHover(i);
+    const x = (points[i][0] / W) * box.width;
+    glideTo(cursor.current, { x });
+    glideTo(dot.current, { x, y: (points[i][1] / H) * box.height });
+  };
+  const endScrub = () => {
+    setTrendHover(null);
+    fadeAway(cursor.current);
+    fadeAway(dot.current);
+  };
+  const hoveredCell = cellHover === null ? null : cells[cellHover];
+  const hoveredDay = trendHover === null ? null : trend[trendHover];
 
   return (
     <section className="panel activity">
       <div className="row">
         <h2>Activity</h2>
-        <span className="muted small">{active} active days</span>
+        <span className="muted small num">
+          {hoveredCell ? `${day(hoveredCell.date)} · ${compact(hoveredCell.tokens)} tokens` : `${active} active days`}
+        </span>
       </div>
-      <div className="heatmap" style={{ gridTemplateColumns: `repeat(${weeks}, 1fr)` }}>
-        {cells.map((c) => (
+      <div
+        className="heatmap"
+        style={{ gridTemplateColumns: `repeat(${weeks}, minmax(0, 1fr))` }}
+        onPointerOver={(e) => overCell(e, true)}
+        onPointerOut={(e) => overCell(e, false)}
+        onPointerLeave={() => setCellHover(null)}
+      >
+        {cells.map((c, i) => (
           <span
-            key={c.date}
+            key={i}
             className="cell"
+            data-i={i}
             data-hidden={c.hidden || undefined}
+            data-today={c.date.getTime() === today.getTime() || undefined}
             // Square root keeps light days visible next to heavy ones.
             style={{ "--level": c.tokens ? 0.25 + 0.75 * Math.sqrt(c.tokens / max) : 0 } as React.CSSProperties}
-            title={`${c.date}: ${compact(c.tokens)} tokens`}
           />
         ))}
       </div>
@@ -501,11 +541,17 @@ export function Activity({ days }: { days: DayUsage[] }) {
 
       <div className="row trend-head">
         <h2>Trend</h2>
-        <span className="muted small">Peak {compact(peak)}</span>
+        <span className="muted small num">
+          {hoveredDay ? `${day(hoveredDay.date)} · ${compact(hoveredDay.tokens)} tokens` : `Peak ${compact(peak)}`}
+        </span>
       </div>
-      <svg className="trend" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-label={`Daily tokens, peak ${compact(peak)}`}>
-        <path d={path} />
-      </svg>
+      <div className="trend-plot" onPointerMove={scrub} onPointerLeave={endScrub}>
+        <svg className="trend" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-label={`Daily tokens, peak ${compact(peak)}`}>
+          <path d={path} />
+        </svg>
+        <span className="trend-cursor" ref={cursor} aria-hidden />
+        <span className="trend-dot" ref={dot} aria-hidden />
+      </div>
       <div className="axis dates">
         <span>{md(trend[0].date)}</span>
         <span>{md(trend[Math.floor(TREND_DAYS / 2)].date)}</span>

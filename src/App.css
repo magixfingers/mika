@@ -517,6 +517,12 @@ h2,
   background: var(--link);
 }
 
+/* While an entrance animation fills the bars, GSAP drives them, not the transition. */
+[data-entering] .meter span,
+[data-entering] .share::after {
+  transition: none;
+}
+
 .share {
   margin-top: 6px;
 }
@@ -735,12 +741,16 @@ h2,
 
 .heatmap {
   display: grid;
-  grid-template-rows: repeat(7, 1fr);
+  /* Rows size from the cells, and the cells from the column width. With 1fr rows
+     WebKit sizes the squares from the row height and the grid runs past the card. */
+  grid-template-rows: repeat(7, auto);
   grid-auto-flow: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .cell {
+  min-width: 0;
   aspect-ratio: 1;
   border-radius: 2px;
   background: var(--hairline-soft);
@@ -749,6 +759,12 @@ h2,
 
 .cell[data-hidden] {
   visibility: hidden;
+}
+
+/* The hovered cell springs up over its neighbours. */
+.cell:hover {
+  position: relative;
+  z-index: 1;
 }
 
 .axis {
@@ -774,10 +790,41 @@ h2,
   margin-top: 4px;
 }
 
+.trend-plot {
+  position: relative;
+  display: flex;
+}
+
 .trend {
   width: 100%;
   height: 4.5em;
   overflow: visible;
+}
+
+/* Hover markers: a hairline and a dot that glide to the day under the pointer. */
+.trend-cursor,
+.trend-dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.trend-cursor {
+  bottom: 0;
+  width: 1px;
+  background: rgba(23, 23, 23, 0.18);
+}
+
+.trend-dot {
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--link);
+  box-shadow: 0 0 0 2px var(--elevated);
 }
 
 .trend path {
@@ -795,6 +842,11 @@ h2,
 .page-overview,
 .page-agents {
   overflow-y: auto;
+  /* The scrollbar sits out in the window's side padding, 8px clear of the cards,
+     and its space is always reserved so the cards keep the header's width. */
+  margin-right: -12px;
+  padding-right: 8px;
+  scrollbar-gutter: stable;
 }
 
 .settings {
@@ -1015,11 +1067,11 @@ html[data-motion="off"] * {
 }
 
 html.scroll-active ::-webkit-scrollbar-thumb {
-  background: rgba(23, 23, 23, 0.22);
+  background: rgba(23, 23, 23, 0.12);
 }
 
 html.scroll-active ::-webkit-scrollbar-thumb:hover {
-  background: rgba(23, 23, 23, 0.4);
+  background: rgba(23, 23, 23, 0.28);
 }
 
 ::-webkit-scrollbar-corner {
