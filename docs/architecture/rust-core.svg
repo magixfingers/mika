@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="mika-rust-core-title mika-rust-core-desc" id="rust-core-root">
         <title id="mika-rust-core-title">Inside Mika's Rust core</title>
-        <desc id="mika-rust-core-desc">Four background threads update shared state, which Tauri emits to the React UI and uses for the menu bar title; the UI calls back into Rust to play alerts.</desc>
+        <desc id="mika-rust-core-desc">Four background threads update shared state, which Tauri emits to the React UI and uses for the menu bar title; the windows call back into Rust to answer and dismiss alerts.</desc>
         <defs>
       <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Noto+Serif:ital@0;1&amp;family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400&amp;family=Noto+Sans+TC:wght@400;500;600&amp;family=Noto+Serif+TC:wght@400&amp;display=swap');
       #rust-core-root { --color-paper: #fafafa;
@@ -41,7 +41,7 @@
 <text x="824.0" y="473" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TRAY TITLE</text>
 <line x1="1052" y1="232" x2="1052" y2="286" stroke="#8f8f8f" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#rust-core-arrow)"/>
 <rect x="1060" y="254.0" width="72" height="12" rx="2" fill="#fafafa"/>
-<text x="1096.0" y="263.0" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">INVOKE ALERT</text>
+<text x="1096.0" y="263.0" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">INVOKE</text>
 <rect x="56" y="160" width="296" height="72" rx="6" fill="#fafafa"/>
 <rect x="56" y="160" width="296" height="72" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
 <rect x="64" y="168" width="36" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
@@ -75,7 +75,7 @@
 <text x="616.0" y="337.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">Statuses tracker</text>
 <text x="616.0" y="351.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">LatestTokens</text>
 <text x="616.0" y="365.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">LatestClaudeLimits</text>
-<text x="616.0" y="379.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle"></text>
+<text x="616.0" y="379.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">Permissions · AlertState</text>
 <text x="616.0" y="393.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">commands: latest_*</text>
 <rect x="896" y="160" width="312" height="72" rx="6" fill="#fafafa"/>
 <rect x="896" y="160" width="312" height="72" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
@@ -87,8 +87,8 @@
 <rect x="896" y="288" width="312" height="72" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
 <rect x="904" y="296" width="40" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
 <text x="924.0" y="305" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">COMMAND</text>
-<text x="1052.0" y="326.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">alert</text>
-<text x="1052.0" y="342.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">afplay Glass · Dock bounce</text>
+<text x="1052.0" y="326.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Alerts</text>
+<text x="1052.0" y="342.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">popup · ringtone · answer</text>
 <rect x="896" y="448" width="312" height="72" rx="6" fill="#fafafa"/>
 <rect x="896" y="448" width="312" height="72" rx="6" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
 <rect x="904" y="456" width="27" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
