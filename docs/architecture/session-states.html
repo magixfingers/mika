@@ -7,49 +7,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --color-paper: #fafafa;
-      --color-ink: #171717;
-      --color-muted: #4d4d4d;
-      --color-accent: #0070f3;
-      --font-sans: 'Geist', system-ui, sans-serif;
-      --font-mono: 'Geist Mono', ui-monospace, monospace;
-    }
-    body {
-      font-family: var(--font-sans);
-      background: var(--color-paper);
-      color: var(--color-ink);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 3rem 2rem;
-    }
-    .frame { max-width: 1280px; width: 100%; }
+    body { font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; background: #ffffff; color: #171717; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 3rem 2rem; }
+    .frame { max-width: 960px; width: 100%; }
     .diagram-container { width: 100%; overflow-x: auto; }
-    .eyebrow {
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-      font-weight: 500;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--color-muted);
-      margin-bottom: 0.5rem;
-    }
-    /* Mika's display style: Geist 600, tightly tracked (instead of the skill's serif). */
-    h1 {
-      font-family: var(--font-sans);
-      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2.25rem);
-      font-weight: 600;
-      letter-spacing: -0.04em;
-      line-height: 1.15;
-      margin-bottom: 1.5rem;
-    }
-    svg { width: 100%; min-width: 1280px; display: block; }
-    @media print {
-      .diagram-container { overflow-x: visible; }
-      svg { min-width: 0; }
-    }
+    .eyebrow { font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: #4d4d4d; margin-bottom: 0.5rem; }
+    h1 { font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2.25rem); font-weight: 600; letter-spacing: -0.04em; line-height: 1.15; margin-bottom: 1.5rem; }
+    svg { width: 100%; min-width: 960px; display: block; }
+    @media print { .diagram-container { overflow-x: visible; } svg { min-width: 0; } }
   </style>
 </head>
 <body>
@@ -57,93 +21,70 @@
     <p class="eyebrow">Session lifecycle · Mika</p>
     <h1>What a session&#x27;s hooks tell Mika</h1>
     <div class="diagram-container">
-      <svg viewBox="0 0 1280 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="mika-session-states-title mika-session-states-desc">
+<svg viewBox="0 0 960 496" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="mika-session-states-title mika-session-states-desc">
 <title id="mika-session-states-title">What a session&#x27;s hooks tell Mika</title>
 <desc id="mika-session-states-desc">A session&#x27;s status as a state machine driven by hook events: idle, thinking, working, needs you, done and your turn.</desc>
 <defs>
-<marker id="session-states-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#8f8f8f"/></marker>
-<marker id="session-states-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#0070f3"/></marker>
-<marker id="session-states-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#8f8f8f" stroke-width="1.2"/></marker>
+<marker id="session-states-arrow" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><polygon points="0 0, 9 3.5, 0 7" fill="#7d7d7d"/></marker>
+<marker id="session-states-arrow-accent" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><polygon points="0 0, 9 3.5, 0 7" fill="#0070f3"/></marker>
+<marker id="session-states-arrow-open" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><polyline points="0 0, 9 3.5, 0 7" fill="none" stroke="#7d7d7d" stroke-width="1.3"/></marker>
 </defs>
-<rect width="100%" height="100%" fill="#fafafa"/>
-<circle cx="48" cy="192" r="6" fill="#171717"/>
-<line x1="56" y1="192" x2="138" y2="192" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#session-states-arrow)"/>
-<rect x="57.5" y="172" width="79" height="12" rx="2" fill="#fafafa"/>
-<text x="97.0" y="181" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SESSIONSTART</text>
-<line x1="300" y1="192" x2="418" y2="192" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#session-states-arrow)"/>
-<rect x="317.0" y="172" width="84" height="12" rx="2" fill="#fafafa"/>
-<text x="359.0" y="181" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PROMPT SUBMIT</text>
-<line x1="580" y1="180" x2="698" y2="180" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#session-states-arrow)"/>
-<rect x="605.0" y="160" width="68" height="12" rx="2" fill="#fafafa"/>
-<text x="639.0" y="169" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PRETOOLUSE</text>
-<line x1="700" y1="208" x2="582" y2="208" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#session-states-arrow)"/>
-<rect x="602.5" y="216" width="73" height="12" rx="2" fill="#fafafa"/>
-<text x="639.0" y="225" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">POSTTOOLUSE</text>
-<line x1="860" y1="192" x2="978" y2="192" stroke="#0070f3" stroke-width="1.6" marker-end="url(#session-states-arrow-accent)"/>
-<rect x="885.0" y="172" width="68" height="12" rx="2" fill="#fafafa"/>
-<text x="919.0" y="181" fill="#0070f3" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PERMISSION</text>
-<path d="M1060,160 V120 Q1060,112 1052,112 H508 Q500,112 500,120 V158" fill="none" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#session-states-arrow)"/>
-<rect x="751.5" y="92" width="57" height="12" rx="2" fill="#fafafa"/>
-<text x="780.0" y="101" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ANSWERED</text>
-<line x1="460" y1="224" x2="460" y2="358" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#session-states-arrow)"/>
-<rect x="470" y="252" width="36" height="12" rx="2" fill="#fafafa"/>
-<text x="488" y="261" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">STOP</text>
-<path d="M420,392 H228 Q220,392 220,384 V226" fill="none" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#session-states-arrow)"/>
-<rect x="286.0" y="372" width="68" height="12" rx="2" fill="#fafafa"/>
-<text x="320.0" y="381" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">AFTER 30 S</text>
-<line x1="580" y1="392" x2="698" y2="392" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#session-states-arrow)"/>
-<rect x="602.5" y="372" width="73" height="12" rx="2" fill="#fafafa"/>
-<text x="639.0" y="381" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">IDLE PROMPT</text>
-<path d="M780,360 V308 Q780,300 772,300 H548 Q540,300 540,292 V226" fill="none" stroke="#8f8f8f" stroke-width="1.2" marker-end="url(#session-states-arrow)"/>
-<rect x="618.0" y="280" width="84" height="12" rx="2" fill="#fafafa"/>
-<text x="660.0" y="289" fill="#8f8f8f" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PROMPT SUBMIT</text>
-<rect x="140" y="160" width="160" height="64" rx="8" fill="#fafafa"/>
-<rect x="140" y="160" width="160" height="64" rx="8" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
-<rect x="148" y="168" width="33" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
-<text x="164.5" y="177" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">STATE</text>
-<text x="220.0" y="198.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Idle</text>
-<text x="220.0" y="214.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">breathes, blinks, dozes</text>
-<rect x="420" y="160" width="160" height="64" rx="8" fill="#fafafa"/>
-<rect x="420" y="160" width="160" height="64" rx="8" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
-<rect x="428" y="168" width="33" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
-<text x="444.5" y="177" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">STATE</text>
-<text x="500.0" y="198.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Thinking</text>
-<text x="500.0" y="214.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">model is generating</text>
-<rect x="700" y="160" width="160" height="64" rx="8" fill="#fafafa"/>
-<rect x="700" y="160" width="160" height="64" rx="8" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
-<rect x="708" y="168" width="33" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
-<text x="724.5" y="177" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">STATE</text>
-<text x="780.0" y="198.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Working</text>
-<text x="780.0" y="214.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">running a tool</text>
-<rect x="980" y="160" width="160" height="64" rx="8" fill="#fafafa"/>
-<rect x="980" y="160" width="160" height="64" rx="8" fill="#0070f3" fill-opacity="0.06" stroke="#0070f3" stroke-width="1"/>
-<rect x="988" y="168" width="33" height="12" rx="2" fill="none" stroke="#0070f3" stroke-opacity="0.6" stroke-width="0.8"/>
-<text x="1004.5" y="177" fill="#0070f3" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">STATE</text>
-<text x="1060.0" y="198.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Needs you</text>
-<text x="1060.0" y="214.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">blocked on an answer</text>
-<rect x="420" y="360" width="160" height="64" rx="8" fill="#fafafa"/>
-<rect x="420" y="360" width="160" height="64" rx="8" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
-<rect x="428" y="368" width="33" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
-<text x="444.5" y="377" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">STATE</text>
-<text x="500.0" y="398.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Done</text>
-<text x="500.0" y="414.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">celebrates, then settles</text>
-<rect x="700" y="360" width="160" height="64" rx="8" fill="#fafafa"/>
-<rect x="700" y="360" width="160" height="64" rx="8" fill="#ffffff" stroke="#d4d4d4" stroke-width="1"/>
-<rect x="708" y="368" width="33" height="12" rx="2" fill="none" stroke="#d4d4d4" stroke-opacity="0.6" stroke-width="0.8"/>
-<text x="724.5" y="377" fill="#8f8f8f" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">STATE</text>
-<text x="780.0" y="398.0" fill="#171717" font-size="13" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Your turn</text>
-<text x="780.0" y="414.0" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace" text-anchor="middle">ready for your message</text>
-<text x="40" y="484" fill="#4d4d4d" font-size="10" font-family="'Geist Mono', monospace">* → Needs you on any permission prompt or question.   * → removed on SessionEnd, or after 6 hours without an event.</text>
-<line x1="40" y1="512" x2="1240" y2="512" stroke="#ebebeb" stroke-width="0.8"/>
-<text x="40" y="532" fill="#4d4d4d" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
-<rect x="120" y="521" width="28" height="14" rx="3" fill="#ffffff" stroke="#d4d4d4"/>
-<text x="156" y="532" fill="#4d4d4d" font-size="10" font-family="'Geist', sans-serif">State</text>
-<rect x="216.0" y="521" width="28" height="14" rx="3" fill="#0070f3" fill-opacity="0.06" stroke="#0070f3"/>
-<text x="252.0" y="532" fill="#4d4d4d" font-size="10" font-family="'Geist', sans-serif">Blocked on you: popup and ringtone</text>
-<line x1="474.4" y1="528" x2="502.4" y2="528" stroke="#8f8f8f" stroke-width="1.4" marker-end="url(#session-states-arrow)"/>
-<text x="510.4" y="532" fill="#4d4d4d" font-size="10" font-family="'Geist', sans-serif">Hook event</text>
-<circle cx="612.4" cy="528" r="5" fill="#171717"/>
-<text x="634.4" y="532" fill="#4d4d4d" font-size="10" font-family="'Geist', sans-serif">Session starts</text>
+<circle cx="180" cy="30" r="6" fill="#7d7d7d"/>
+<path d="M180,38 L180,86" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#session-states-arrow)"/>
+<text x="192" y="64" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.06em">SESSIONSTART</text>
+<path d="M264,122 L394,122" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#session-states-arrow)"/>
+<text x="329" y="112" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle" letter-spacing="0.06em">PROMPT SUBMIT</text>
+<path d="M564,108 L694,108" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#session-states-arrow)"/>
+<text x="629" y="98" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle" letter-spacing="0.06em">PRETOOLUSE</text>
+<path d="M696,136 L566,136" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#session-states-arrow)"/>
+<text x="629" y="154" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle" letter-spacing="0.06em">POSTTOOLUSE</text>
+<path d="M820,156 L820,298" fill="none" stroke="#0070f3" stroke-width="1.8" marker-end="url(#session-states-arrow-accent)"/>
+<text x="832" y="232" fill="#0070f3" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.06em">PERMISSION</text>
+<path d="M740,300 L740,236 Q740,228 732,228 L538,228 Q530,228 530,220 L530,158" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#session-states-arrow)"/>
+<text x="636" y="218" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle" letter-spacing="0.06em">ANSWERED</text>
+<path d="M430,156 L430,220 Q430,228 422,228 L228,228 Q220,228 220,236 L220,298" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#session-states-arrow)"/>
+<text x="325" y="218" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle" letter-spacing="0.06em">STOP</text>
+<path d="M140,300 L140,158" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#session-states-arrow)"/>
+<text x="128" y="232" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="end" letter-spacing="0.06em">AFTER 30 S</text>
+<path d="M264,334 L394,334" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#session-states-arrow)"/>
+<text x="329" y="324" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle" letter-spacing="0.06em">IDLE PROMPT</text>
+<path d="M480,300 L480,158" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#session-states-arrow)"/>
+<text x="492" y="268" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.06em">PROMPT SUBMIT</text>
+<rect x="96" y="88" width="168" height="68" rx="10" fill="#ffffff" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="106" y="105" fill="#7d7d7d" font-size="9.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.08em">STATE</text>
+<text x="180" y="124.5" fill="#171717" font-size="16" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle" font-weight="600">Idle</text>
+<text x="180" y="144.5" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">calm, dozing</text>
+<rect x="396" y="88" width="168" height="68" rx="10" fill="#ffffff" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="406" y="105" fill="#7d7d7d" font-size="9.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.08em">STATE</text>
+<text x="480" y="124.5" fill="#171717" font-size="16" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle" font-weight="600">Thinking</text>
+<text x="480" y="144.5" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">model is generating</text>
+<rect x="696" y="88" width="168" height="68" rx="10" fill="#ffffff" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="706" y="105" fill="#7d7d7d" font-size="9.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.08em">STATE</text>
+<text x="780" y="124.5" fill="#171717" font-size="16" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle" font-weight="600">Working</text>
+<text x="780" y="144.5" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">running a tool</text>
+<rect x="96" y="300" width="168" height="68" rx="10" fill="#ffffff" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="106" y="317" fill="#7d7d7d" font-size="9.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.08em">STATE</text>
+<text x="180" y="336.5" fill="#171717" font-size="16" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle" font-weight="600">Done</text>
+<text x="180" y="356.5" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">celebrates, settles</text>
+<rect x="396" y="300" width="168" height="68" rx="10" fill="#ffffff" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="406" y="317" fill="#7d7d7d" font-size="9.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.08em">STATE</text>
+<text x="480" y="336.5" fill="#171717" font-size="16" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle" font-weight="600">Your turn</text>
+<text x="480" y="356.5" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">awaiting your message</text>
+<rect x="696" y="300" width="168" height="68" rx="10" fill="#eaf3ff" stroke="#0070f3" stroke-width="1.2"/>
+<text x="706" y="317" fill="#0070f3" font-size="9.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.08em">STATE</text>
+<text x="780" y="336.5" fill="#171717" font-size="16" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle" font-weight="600">Needs you</text>
+<text x="780" y="356.5" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">blocked on an answer</text>
+<text x="24" y="404" fill="#7d7d7d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start">* → Needs you on any permission prompt or question.</text>
+<text x="24" y="424" fill="#7d7d7d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start">* → removed on SessionEnd, or after 6 hours without an event.</text>
+<line x1="24" y1="448" x2="936" y2="448" stroke="#7d7d7d" stroke-opacity="0.3" stroke-width="1"/>
+<rect x="24" y="464" width="28" height="16" rx="4" fill="#ffffff" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="62" y="476" fill="#7d7d7d" font-size="12" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="start">State</text>
+<rect x="123.0" y="464" width="28" height="16" rx="4" fill="#eaf3ff" stroke="#0070f3" stroke-width="1.2"/>
+<text x="161" y="476" fill="#7d7d7d" font-size="12" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="start">Blocked on you: popup and ringtone</text>
+<path d="M413.4,472 L441.4,472" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#session-states-arrow)"/>
+<text x="451.4" y="476" fill="#7d7d7d" font-size="12" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="start">Hook event</text>
+<circle cx="559.4" cy="472" r="6" fill="#7d7d7d"/>
+<text x="583.4" y="476" fill="#7d7d7d" font-size="12" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="start">Session starts</text>
 </svg>
     </div>
   </div>
