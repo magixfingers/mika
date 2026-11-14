@@ -1,6 +1,8 @@
-// Thin scrollbars that only show while the user is active: any mouse move,
-// wheel, scroll, touch or key press reveals them; they fade after a short idle,
-// and hide at once when the pointer leaves the window or Mika loses focus.
+// Thin scrollbars that only show while the mouse is active over Mika: a mouse
+// move, click, wheel or touch reveals them; they fade after a short idle, and
+// hide at once when the pointer leaves the window or Mika loses focus. Scrolling
+// and key presses only count while the pointer is over the window, so content
+// that scrolls by itself never brings them back.
 
 const IDLE_MS = 1200;
 /** The elements that scroll (App.css, "overflow-y: auto"). */
@@ -39,14 +41,29 @@ export function autoHideScrollbars() {
     timer = window.setTimeout(sleep, IDLE_MS);
   };
 
-  const events = ["mousemove", "mousedown", "wheel", "keydown", "touchstart"] as const;
-  events.forEach((e) => window.addEventListener(e, wake, { passive: true }));
+  let hovering = false;
+  const pointer = () => {
+    hovering = true;
+    wake();
+  };
+  const whileHovering = () => {
+    if (hovering) wake();
+  };
+  const leave = () => {
+    hovering = false;
+    sleep();
+  };
+
+  const events = ["mousemove", "mousedown", "wheel", "touchstart"] as const;
+  events.forEach((e) => window.addEventListener(e, pointer, { passive: true }));
+  window.addEventListener("keydown", whileHovering, { passive: true });
   // Scroll doesn't bubble, so listen in the capture phase to catch inner scrollers.
-  window.addEventListener("scroll", wake, { passive: true, capture: true });
+  window.addEventListener("scroll", whileHovering, { passive: true, capture: true });
 
   // Pointer left the window (no element it moved to) or Mika went to the background.
   document.addEventListener("mouseout", (e) => {
-    if (!e.relatedTarget) sleep();
+    if (!e.relatedTarget) leave();
   });
-  window.addEventListener("blur", sleep);
+  document.documentElement.addEventListener("mouseleave", leave);
+  window.addEventListener("blur", leave);
 }
