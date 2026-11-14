@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 468" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="mika-system-overview-title mika-system-overview-desc">
+<title id="mika-system-overview-title">Mika at a glance</title>
+<desc id="mika-system-overview-desc">Four sources (agent hooks, session logs, macOS and Anthropic&#x27;s usage endpoint) feed the Rust core, which publishes events to the main window, raises the alert popup and sets the menu bar title; the window sends commands back to the core.</desc>
+<defs>
+<style>@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap');</style>
+<marker id="system-overview-arrow" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><polygon points="0 0, 9 3.5, 0 7" fill="#7d7d7d"/></marker>
+<marker id="system-overview-arrow-accent" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><polygon points="0 0, 9 3.5, 0 7" fill="#0070f3"/></marker>
+<marker id="system-overview-arrow-open" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><polyline points="0 0, 9 3.5, 0 7" fill="none" stroke="#7d7d7d" stroke-width="1.3"/></marker>
+</defs>
+<text x="24" y="26" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.12em">SOURCES</text>
+<text x="356" y="26" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.12em">RUST CORE</text>
+<text x="730" y="26" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.12em">SURFACES</text>
+<path d="M244,76 L354,76" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#system-overview-arrow)"/>
+<text x="300" y="66" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle" letter-spacing="0.06em">HOOK EVENTS</text>
+<path d="M244,168 L354,168" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#system-overview-arrow)"/>
+<text x="300" y="158" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle" letter-spacing="0.06em">NEW LINES</text>
+<path d="M244,260 L354,260" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#system-overview-arrow)"/>
+<text x="300" y="250" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle" letter-spacing="0.06em">SAMPLE</text>
+<path d="M244,352 L354,352" fill="none" stroke="#7d7d7d" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#system-overview-arrow)"/>
+<text x="300" y="342" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle" letter-spacing="0.06em">USAGE JSON</text>
+<path d="M606,62 L728,62" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#system-overview-arrow)"/>
+<text x="668" y="52" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle" letter-spacing="0.06em">EVENTS</text>
+<path d="M730,92 L608,92" fill="none" stroke="#7d7d7d" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#system-overview-arrow)"/>
+<text x="668" y="110" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle" letter-spacing="0.06em">COMMANDS</text>
+<path d="M606,214 L728,214" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#system-overview-arrow)"/>
+<text x="668" y="204" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle" letter-spacing="0.06em">ALERT</text>
+<path d="M606,352 L728,352" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#system-overview-arrow)"/>
+<text x="668" y="342" fill="#7d7d7d" font-size="10.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle" letter-spacing="0.06em">TITLE</text>
+<rect x="24" y="40" width="220" height="72" rx="8" fill="#ffffff" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="34" y="57" fill="#7d7d7d" font-size="9.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.08em">HOOKS</text>
+<text x="134" y="78.5" fill="#171717" font-size="16" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle" font-weight="600">Agent hooks</text>
+<text x="134" y="98.5" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">curl → 127.0.0.1:47321</text>
+<rect x="24" y="132" width="220" height="72" rx="8" fill="#ffffff" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="34" y="149" fill="#7d7d7d" font-size="9.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.08em">LOGS</text>
+<text x="134" y="170.5" fill="#171717" font-size="16" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle" font-weight="600">Session logs</text>
+<text x="134" y="190.5" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">~/.claude · ~/.codex</text>
+<rect x="24" y="224" width="220" height="72" rx="8" fill="#ffffff" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="34" y="241" fill="#7d7d7d" font-size="9.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.08em">MACOS</text>
+<text x="134" y="262.5" fill="#171717" font-size="16" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle" font-weight="600">macOS</text>
+<text x="134" y="282.5" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">processes · memory · sensors</text>
+<rect x="24" y="316" width="220" height="72" rx="8" fill="#ffffff" stroke="#a3a3a3" stroke-width="1.2" stroke-dasharray="5,4"/>
+<text x="34" y="333" fill="#7d7d7d" font-size="9.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.08em">API</text>
+<text x="134" y="354.5" fill="#171717" font-size="16" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle" font-weight="600">Anthropic usage API</text>
+<text x="134" y="374.5" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">HTTPS endpoint</text>
+<rect x="356" y="40" width="250" height="348" rx="8" fill="#eaf3ff" stroke="#0070f3" stroke-width="1.2"/>
+<text x="366" y="57" fill="#0070f3" font-size="9.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.08em">RUST</text>
+<text x="481" y="172" fill="#171717" font-size="16" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle" font-weight="600">Rust core</text>
+<text x="481" y="192" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">status.rs · permission.rs</text>
+<text x="481" y="209" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">tokens.rs</text>
+<text x="481" y="226" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">sampler.rs</text>
+<text x="481" y="243" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">claude_limits.rs</text>
+<text x="481" y="260" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle"></text>
+<text x="481" y="277" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">managed state + events</text>
+<rect x="730" y="40" width="206" height="72" rx="8" fill="#ffffff" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="740" y="57" fill="#7d7d7d" font-size="9.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.08em">WINDOW</text>
+<text x="833" y="78.5" fill="#171717" font-size="16" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle" font-weight="600">Main window</text>
+<text x="833" y="98.5" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">React</text>
+<rect x="730" y="178" width="206" height="72" rx="8" fill="#ffffff" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="740" y="195" fill="#7d7d7d" font-size="9.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.08em">WINDOW</text>
+<text x="833" y="216.5" fill="#171717" font-size="16" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle" font-weight="600">Alert popup</text>
+<text x="833" y="236.5" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">React · #alert</text>
+<rect x="730" y="316" width="206" height="72" rx="8" fill="#ffffff" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="740" y="333" fill="#7d7d7d" font-size="9.5" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="start" letter-spacing="0.08em">TRAY</text>
+<text x="833" y="354.5" fill="#171717" font-size="16" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="middle" font-weight="600">Menu bar title</text>
+<text x="833" y="374.5" fill="#4d4d4d" font-size="12" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="middle">tray</text>
+<line x1="24" y1="420" x2="936" y2="420" stroke="#7d7d7d" stroke-opacity="0.3" stroke-width="1"/>
+<rect x="24" y="436" width="28" height="16" rx="4" fill="#ffffff" stroke="#d4d4d4" stroke-width="1.2"/>
+<text x="62" y="448" fill="#7d7d7d" font-size="12" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="start">Source / surface</text>
+<rect x="195.6" y="436" width="28" height="16" rx="4" fill="#eaf3ff" stroke="#0070f3" stroke-width="1.2"/>
+<text x="233.6" y="448" fill="#7d7d7d" font-size="12" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="start">Rust core</text>
+<rect x="321.0" y="436" width="28" height="16" rx="4" fill="#ffffff" stroke="#a3a3a3" stroke-width="1.2" stroke-dasharray="4,3"/>
+<text x="359" y="448" fill="#7d7d7d" font-size="12" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="start">External service</text>
+<path d="M492.6,444 L520.6,444" fill="none" stroke="#7d7d7d" stroke-width="1.4" marker-end="url(#system-overview-arrow)"/>
+<text x="530.6" y="448" fill="#7d7d7d" font-size="12" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="start">Data / event</text>
+<path d="M637.8,444 L665.8,444" fill="none" stroke="#7d7d7d" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#system-overview-arrow)"/>
+<text x="675.8" y="448" fill="#7d7d7d" font-size="12" font-family="'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif" text-anchor="start">Network or command</text>
+</svg>

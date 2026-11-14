@@ -7,7 +7,7 @@ Mika is a macOS menu bar application that observes Claude Code and Codex session
 The system has two parts. A Rust core, hosted by Tauri 2, is authoritative for data acquisition, session state and alert decisions. A React and TypeScript window is authoritative for presentation only.
 
 <p align="center">
-  <img src="docs/screenshots/carousel.svg" width="416" alt="Mika's main window, cycling through three screens: Overview, with machine load, today's tokens, plan limits, models and activity; Agents, with running agents and sessions; and Settings, with alert and display options.">
+  <img src="docs/screenshots/carousel.svg" width="280" alt="Mika's main window, cycling through three screens: Overview, with machine load, today's tokens, plan limits, models and activity; Agents, with running agents and sessions; and Settings, with alert and display options.">
 </p>
 
 **Contents:** [System overview](#system-overview) · [Capabilities](#capabilities) · [Installation and integration](#installation-and-integration) · [Architecture](#architecture) · [Runtime behaviour](#runtime-behaviour) · [Presentation layer](#presentation-layer) · [Interface reference](#interface-reference) · [Trust boundaries and privacy](#trust-boundaries-and-privacy) · [Development](#development) · [Known limitations](#known-limitations)
@@ -18,23 +18,7 @@ The system has two parts. A Rust core, hosted by Tauri 2, is authoritative for d
 
 Mika ingests four sources, processes them in the Rust core, and publishes the result to three surfaces: the main window, the menu bar title and the alert popup.
 
-```
- SOURCES                      RUST CORE                        SURFACES
-┌──────────────────────┐    ┌─────────────────────────┐     ┌──────────────────┐
-│ Agent hooks          │───▶│ status.rs               │     │ Main window      │
-│ curl → 127.0.0.1     │    │ permission.rs           │     │ (React)          │
-├──────────────────────┤    ├─────────────────────────┤     ├──────────────────┤
-│ Session logs         │───▶│ tokens.rs               │     │ Alert popup      │
-│ ~/.claude · ~/.codex │    │                         │────▶│ (React, #alert)  │
-├──────────────────────┤    ├─────────────────────────┤     ├──────────────────┤
-│ macOS processes,     │───▶│ sampler.rs              │     │ Menu bar title   │
-│ memory, sensors      │    │                         │     │ (tray)           │
-├──────────────────────┤    ├─────────────────────────┤     └──────────────────┘
-│ Anthropic usage      │───▶│ claude_limits.rs        │              │
-│ endpoint (HTTPS)     │    │                         │◀─────────────┘
-└──────────────────────┘    └─────────────────────────┘   commands (invoke)
-                              managed state + events
-```
+![Mika at a glance: agent hooks, session logs, macOS and Anthropic's usage endpoint feed the Rust core, which publishes events to the main window, raises the alert popup and sets the menu bar title; the window sends commands back](docs/architecture/system-overview.svg)
 
 Three properties follow from this arrangement.
 
