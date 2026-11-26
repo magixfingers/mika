@@ -244,7 +244,7 @@ export function SettingsPage() {
             <Toggle on={s.answer_from_mika} onChange={set("answer_from_mika")} label="Answer permission requests" />
           </Row>
         )}
-        <Row label="Your turn" hint="When an agent has finished and is waiting for your next message. Nothing is blocked, so it never rings or pops up.">
+        <Row label="Your turn" hint="When an agent is waiting for your next message. Show makes the menu-bar ghost call you; Chime also plays the sound once.">
           <Choice
             label="Your turn"
             value={s.turn_alert}
@@ -252,7 +252,7 @@ export function SettingsPage() {
             options={[["off", "Off"], ["status", "Show"], ["chime", "Chime"]]}
           />
         </Row>
-        <Row label="Alert when an agent finishes" hint="Not just when it needs you.">
+        <Row label="Alert when an agent finishes" hint="The menu-bar ghost bobs in its done color and the sound plays once. Click the ghost to see who finished.">
           <Toggle on={s.alert_on_done} onChange={set("alert_on_done")} label="Alert when an agent finishes" />
         </Row>
         <Row label="Quiet hours" hint="No alert sound during these hours; the screen still shows alerts.">

@@ -178,6 +178,17 @@ export interface Settings {
   sample_interval_ms: number;
 }
 
+// Mirrors src-tauri/src/attention.rs.
+
+export interface AttentionItem {
+  session_id: string;
+  agent: "claude" | "codex";
+  cwd: string | null;
+  folder: string;
+  state: "done" | "turn" | "waiting";
+  since_ms: number;
+}
+
 // Mirrors src-tauri/src/alert.rs.
 
 export interface AlertInfo {
