@@ -1,4 +1,5 @@
 mod alert;
+mod attention;
 mod claude_limits;
 mod gpu;
 mod permission;
@@ -16,6 +17,7 @@ use std::time::{Duration, Instant};
 use notify::{RecursiveMode, Watcher};
 
 use alert::{AlertInfo, AlertKind, AlertState};
+use attention::Attention;
 use claude_limits::ClaudeLimits;
 use permission::{Choice, Permissions};
 use sampler::{AgentKind, Sampler, Snapshot};
@@ -177,6 +179,38 @@ fn open_alert_target(app: AppHandle) {
 #[tauri::command]
 fn answer_permission(app: AppHandle, id: u64, choice: Choice) {
     app.state::<Permissions>().answer(id, choice);
+}
+
+/// Who needs the user, for the popup under the tray icon.
+#[tauri::command]
+fn attention_list(state: State<'_, Attention>) -> Vec<attention::Item> {
+    state.items()
+}
+
+/// Takes the user to a session from the attention popup: its terminal tab,
+/// or the app hosting it.
+#[tauri::command]
+fn open_attention(app: AppHandle, session_id: String) {
+    let Some(item) = app.state::<Attention>().remove(&session_id) else { return };
+    attention::hide_popup(&app);
+    attention::publish(&app);
+    let (host_app, pid) = host_for(&app, item.agent, item.cwd.as_deref()).unzip();
+    thread::spawn(move || {
+        alert::focus_agent(host_app.flatten().as_deref(), pid);
+    });
+}
+
+#[tauri::command]
+fn clear_attention(app: AppHandle) {
+    app.state::<Attention>().clear();
+    attention::hide_popup(&app);
+    attention::publish(&app);
+}
+
+#[tauri::command]
+fn open_main_from_attention(app: AppHandle) {
+    attention::hide_popup(&app);
+    show_main_window(&app);
 }
 
 #[tauri::command]
@@ -455,29 +489,53 @@ fn alert_on_change(app: &AppHandle, before: Option<AgentState>, now: &SessionSta
         can_always: false,
     };
     let busy = app.state::<AlertState>().waiting_on_other(&now.session_id);
+    // Finished, your turn and needs you all join the attention list, which
+    // makes the menu-bar ghost take the state's color and bob until clicked.
+    // Returns true when the session is new to the list, so it rings once.
+    let raise = |state| {
+        app.state::<Attention>().raise(attention::Item {
+            session_id: now.session_id.clone(),
+            agent: now.agent,
+            cwd: now.cwd.clone(),
+            folder: folder.clone(),
+            state,
+            since_ms: now.since_ms,
+        })
+    };
+    let chime = || {
+        if settings.sound_enabled && !settings.is_quiet_now() {
+            let _ = std::process::Command::new("afplay").arg(settings.sound_path()).spawn();
+        }
+    };
     let result = match now.state {
-        // Nothing is blocked: at most one chime, never the popup.
-        AgentState::Turn => {
-            if settings.turn_alert == "chime" && settings.sound_enabled && !settings.is_quiet_now() {
-                let _ = std::process::Command::new("afplay").arg(settings.sound_path()).spawn();
+        // Nothing is blocked: the ghost calls and one chime plays, never the popup.
+        AgentState::Turn if settings.turn_alert != "off" => {
+            if raise(AgentState::Turn) && settings.turn_alert == "chime" {
+                chime();
             }
             Ok(())
         }
-        // Never cover a popup still waiting on an answer for another session.
-        AgentState::Waiting if busy => {
-            alert(app.clone(), format!("{label} needs you"), folder);
-            Ok(())
-        }
-        AgentState::Waiting => show_alert(app.clone(), info(AlertKind::Waiting, format!("{label} needs you"), folder)),
-        AgentState::Done if settings.alert_on_done && !busy => {
-            show_alert(app.clone(), info(AlertKind::Done, format!("{label} finished"), folder))
-        }
         AgentState::Done if settings.alert_on_done => {
-            alert(app.clone(), "Mika · an agent finished".into(), format!("{label} in {folder} is done."));
+            if raise(AgentState::Done) {
+                chime();
+            }
             Ok(())
+        }
+        // Blocked: the ghost turns red, and the popup still opens on its own
+        // so a permission request can be answered right away.
+        AgentState::Waiting => {
+            raise(AgentState::Waiting);
+            if busy {
+                // Never cover a popup still waiting on an answer for another session.
+                alert(app.clone(), format!("{label} needs you"), folder.clone());
+                Ok(())
+            } else {
+                show_alert(app.clone(), info(AlertKind::Waiting, format!("{label} needs you"), folder.clone()))
+            }
         }
         _ => Ok(()),
     };
+    attention::publish(app);
     if let Err(err) = result {
         eprintln!("mika: alert popup failed: {err}");
     }
@@ -519,6 +577,13 @@ fn track(app: &AppHandle, event: HookEvent) -> Option<(Option<AgentState>, Optio
         (before, tracker.get(&id).cloned())
     });
     publish_statuses(app);
+    // Back at work, or the session ended: it no longer needs the user.
+    if let Some((_, after)) = &change
+        && after.as_ref().is_none_or(|s| matches!(s.state, AgentState::Thinking | AgentState::Working))
+        && app.state::<Attention>().remove(&id).is_some()
+    {
+        attention::publish(app);
+    }
     change
 }
 
@@ -638,7 +703,8 @@ pub fn run() {
         .manage(LatestClaudeLimits::default())
         .manage(AlertState::default())
         .manage(Permissions::default())
-        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens, claude_limits, alert, log_frontend, get_settings, set_settings, preview_sound, hooks_status, install_hooks, remove_hooks, show_alert, dismiss_alert, open_alert_target, current_alert, focus_app, answer_permission])
+        .manage(Attention::default())
+        .invoke_handler(tauri::generate_handler![latest_snapshot, session_statuses, latest_tokens, claude_limits, alert, log_frontend, get_settings, set_settings, preview_sound, hooks_status, install_hooks, remove_hooks, show_alert, dismiss_alert, open_alert_target, current_alert, focus_app, answer_permission, attention_list, open_attention, clear_attention, open_main_from_attention])
         .setup(|app| {
             // Menu bar only: no Dock icon and no Cmd+Tab entry. Bundled builds
             // also set LSUIElement (Info.plist) so the Dock icon never flashes.
@@ -665,7 +731,12 @@ pub fn run() {
 
             TrayIconBuilder::with_id(TRAY_ID)
                 // A template silhouette: macOS tints it to match the menu bar.
-                .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray-icon.png"))?)
+                // Drawn like the animation frames so the ghost keeps its size
+                // when it starts calling.
+                .icon(match attention::resting_icon() {
+                    Some(icon) => icon,
+                    None => tauri::image::Image::from_bytes(include_bytes!("../icons/tray-icon.png"))?,
+                })
                 .icon_as_template(true)
                 .title("Mika")
                 .tooltip("Mika — agent monitor")
@@ -680,10 +751,22 @@ pub fn run() {
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
+                        rect,
                         ..
                     } = event
                     {
-                        toggle_main_window(tray.app_handle());
+                        let app = tray.app_handle();
+                        // Someone needs the user: list them under the icon.
+                        // Otherwise the click opens Mika as before.
+                        let attention = app.state::<Attention>();
+                        if attention.is_empty() {
+                            toggle_main_window(app);
+                        } else {
+                            attention.mark_seen();
+                            if let Err(err) = attention::toggle_popup(app, rect) {
+                                eprintln!("mika: attention popup failed: {err}");
+                            }
+                        }
                     }
                 })
                 .build(app)?;
@@ -730,6 +813,7 @@ pub fn run() {
             spawn_hook_listener(app.handle().clone());
             spawn_token_scanner(app.handle().clone());
             spawn_claude_limits(app.handle().clone());
+            attention::spawn_animator(app.handle().clone(), TRAY_ID, |app| current_settings(app).motion != "off");
             Ok(())
         })
         .on_menu_event(|app, event| {

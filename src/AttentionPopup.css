@@ -1,0 +1,135 @@
+/* The list under the menu-bar ghost. Like the alert popup, it fills its own
+   small window: no card frame, mono eyebrow, one row per agent. */
+
+html[data-window="attention"],
+html[data-window="attention"] body,
+html[data-window="attention"] #root {
+  height: 100%;
+}
+
+html[data-window="attention"] body {
+  background: var(--elevated);
+  overflow: hidden;
+}
+
+.attention {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 8px 8px;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+.attention-eyebrow {
+  padding: 0 8px 6px;
+}
+
+.attention-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.attention-row {
+  width: 100%;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.attention-row:hover,
+.attention-row:focus-visible {
+  background: var(--canvas);
+}
+
+.attention-row:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: -2px;
+}
+
+.attention-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.attention-title,
+.attention-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attention-title {
+  font-weight: 500;
+}
+
+/* The state's word carries its color: red blocked, violet your turn, mint done. */
+.attention-row[data-state="waiting"] .attention-verb {
+  color: var(--error);
+}
+
+.attention-row[data-state="turn"] .attention-verb {
+  color: var(--violet);
+}
+
+.attention-row[data-state="done"] .attention-verb {
+  color: var(--body);
+}
+
+.attention-meta {
+  font-size: 0.86rem;
+  color: var(--mute);
+}
+
+.attention-go {
+  flex: none;
+  color: var(--faint);
+  font-size: 1.1rem;
+}
+
+.attention-footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 8px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.attention-link {
+  height: 2em;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--body);
+  cursor: pointer;
+}
+
+.attention-link:hover {
+  color: var(--ink);
+}
+
+.attention-link:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+  border-radius: 4px;
+}

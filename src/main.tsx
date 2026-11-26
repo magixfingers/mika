@@ -4,19 +4,20 @@ import "@fontsource-variable/geist";
 import "@fontsource-variable/geist-mono";
 import App from "./App";
 import { AlertPopup } from "./AlertPopup";
+import { AttentionPopup } from "./AttentionPopup";
 import { SettingsProvider } from "./settings";
 import { autoHideScrollbars } from "./scrollbars";
 
 autoHideScrollbars();
 
-const isAlert = window.location.hash === "#alert";
-if (isAlert) document.documentElement.dataset.window = "alert";
+// The alert and attention popups load the same bundle at #alert and #attention.
+const popup = window.location.hash.slice(1);
+if (popup === "alert" || popup === "attention") document.documentElement.dataset.window = popup;
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <SettingsProvider>
-      {/* The alert window loads the same bundle at #alert. */}
-      {isAlert ? <AlertPopup /> : <App />}
+      {popup === "alert" ? <AlertPopup /> : popup === "attention" ? <AttentionPopup /> : <App />}
     </SettingsProvider>
   </React.StrictMode>,
 );

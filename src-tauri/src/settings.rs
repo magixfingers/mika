@@ -95,8 +95,8 @@ impl Default for Settings {
         Self {
             sound_enabled: true,
             sound: "Glass".into(),
-            alert_on_done: false,
-            turn_alert: "status".into(),
+            alert_on_done: true,
+            turn_alert: "chime".into(),
             alert_popup: true,
             answer_from_mika: true,
             quiet_hours: false,
