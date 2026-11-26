@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { currentMonitor, getCurrentWindow, LogicalPosition, LogicalSize } from "@tauri-apps/api/window";
 import type { Agent, AgentState, ClaudeLimits, SessionStatus, Snapshot, TokenStats } from "./types";
 import { Mika, STATE_LABELS } from "./Mika";
 import { Activity, Limits, Models, ProviderMark, providerOf, RangePicker, Sessions, SystemPanel, Totals, usageIn, type Range } from "./Usage";
@@ -147,6 +147,68 @@ function dragWindow(e: React.MouseEvent) {
   getCurrentWindow().startDragging();
 }
 
+/**
+ * Sizes the window so the Overview page shows in full without scrolling: it
+ * grows or shrinks to fit when the window gains focus and whenever the cards
+ * change height, capped at the screen's work area (moving up if it would run
+ * off the bottom). Does nothing while Overview is hidden.
+ */
+function useFitOverview(mainRef: React.RefObject<HTMLElement | null>, page: string) {
+  useEffect(() => {
+    const overview = mainRef.current?.querySelector<HTMLElement>(".page-overview");
+    if (!overview) return;
+    const win = getCurrentWindow();
+    let frame = 0;
+    const fit = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(async () => {
+        const last = overview.lastElementChild as HTMLElement | null;
+        if (!last || overview.offsetParent === null) return;
+        // Layout offsets, not bounding boxes: entrance animations transform the cards.
+        const padBottom = parseFloat(getComputedStyle(overview).paddingBottom) || 0;
+        const content = last.offsetTop + last.offsetHeight - overview.offsetTop + padBottom;
+        const delta = Math.ceil(content - overview.clientHeight);
+        if (Math.abs(delta) < 2) return;
+        const scale = await win.scaleFactor();
+        const inner = (await win.innerSize()).toLogical(scale);
+        let height = inner.height + delta;
+        const monitor = await currentMonitor();
+        if (monitor) {
+          const area = monitor.workArea;
+          const areaTop = area.position.y / monitor.scaleFactor;
+          const areaHeight = area.size.height / monitor.scaleFactor;
+          height = Math.min(height, areaHeight);
+          const pos = (await win.outerPosition()).toLogical(scale);
+          if (pos.y + height > areaTop + areaHeight) {
+            await win.setPosition(new LogicalPosition(pos.x, Math.max(areaTop, areaTop + areaHeight - height)));
+          }
+        }
+        await win.setSize(new LogicalSize(inner.width, height));
+      });
+    };
+    const resize = new ResizeObserver(fit);
+    const watch = () => {
+      resize.disconnect();
+      for (const child of overview.children) resize.observe(child);
+    };
+    watch();
+    // Cards appear once data loads; observe them as they're added.
+    const mutations = new MutationObserver(() => {
+      watch();
+      fit();
+    });
+    mutations.observe(overview, { childList: true });
+    const unfocus = win.onFocusChanged(({ payload: focused }) => focused && fit());
+    fit();
+    return () => {
+      cancelAnimationFrame(frame);
+      resize.disconnect();
+      mutations.disconnect();
+      unfocus.then((off) => off());
+    };
+  }, [mainRef, page]);
+}
+
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mainRef = useRef<HTMLElement>(null);
@@ -278,6 +340,7 @@ function App() {
   const tabbarRef = useRef<HTMLElement>(null);
   const tabPill = useSlidingPill(tabbarRef, '[aria-current="page"]', page);
   // Replays on each page or range switch, and once when the first data arrives.
+  useFitOverview(mainRef, page);
   useEntrance(mainRef, ".totals, .panel", `${page}:${range}:${tokens !== null}`);
 
   // Alerts (the popup, its ringtone and "agent finished") fire from the Rust core
@@ -308,7 +371,7 @@ function App() {
             onKeyDown={(e) => e.key === "Enter" && openWaitingSession()}
           >
             <span className="mika-slot" ref={mikaRef}>
-              <Mika state={overall?.state ?? "idle"} size={40} />
+              <Mika state={overall?.state ?? "idle"} size={32} />
             </span>
             <div>
               <h1>Mika</h1>

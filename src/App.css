@@ -28,7 +28,7 @@
 
   font-family: var(--sans);
   /* body-md, growing slightly with the window. */
-  font-size: clamp(14px, 0.78rem + 0.5vw, 16px);
+  font-size: clamp(13px, 0.72rem + 0.4vw, 15px);
   line-height: 1.43;
   color: var(--ink);
   background: var(--canvas);
@@ -132,13 +132,13 @@ html.liquid .panel {
 .app {
   height: 100vh;
   /* Top padding clears the overlay traffic lights. */
-  padding: 36px 16px 16px;
+  padding: 34px 12px 12px;
   display: grid;
   grid-template-rows: auto 1fr auto;
   /* One column the window's width: without it, a long header line widens
      the whole page and the cards and gear run off the right edge. */
   grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
+  gap: 8px;
 }
 
 /* Narrow windows show one page at a time; wide ones show both side by side. */
@@ -151,7 +151,7 @@ html.liquid .panel {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   overflow: hidden;
 }
 
@@ -356,7 +356,7 @@ h2,
 
 .segmented button {
   font-size: 0.86rem;
-  padding: 0 11px;
+  padding: 0 9px;
 }
 
 /* The ink pill is one element that GSAP slides under the active option. */
@@ -402,17 +402,17 @@ h2,
 /* --- Totals: the hero, over the mesh gradient --- */
 
 .totals {
-  padding: 8px 2px 4px;
+  padding: 2px 2px 0;
 }
 
 /* display-xl */
 .total-tokens {
-  font-size: clamp(2.2rem, 10vw, 3.4rem);
+  font-size: clamp(1.9rem, 8vw, 2.8rem);
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.05em;
   font-variant-numeric: tabular-nums;
-  margin: 6px 0;
+  margin: 4px 0;
   word-break: break-all;
 }
 
@@ -425,7 +425,20 @@ h2,
   margin-left: 8px;
 }
 
+.total-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.total-line .total-tokens {
+  min-width: 0;
+}
+
 .total-cost {
+  flex: none;
   font-size: 1.07rem;
   font-weight: 500;
   color: var(--body);
@@ -437,11 +450,11 @@ h2,
 .panel {
   background: var(--elevated);
   border: 1px solid var(--hairline);
-  border-radius: 12px;
-  padding: 14px 16px;
+  border-radius: 10px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .list {
@@ -450,7 +463,7 @@ h2,
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
 .name {
@@ -478,18 +491,31 @@ h2,
 .limit-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
 }
 
 .limit-group + .limit-group {
-  padding-top: 10px;
+  padding-top: 6px;
   border-top: 1px solid var(--hairline);
 }
 
+/* One line per limit: label, bar, then what's left. */
 .limit {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px 4.6em;
+  align-items: center;
+  gap: 8px;
+}
+
+.limit-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.limit-left {
+  text-align: right;
+  white-space: nowrap;
 }
 
 .meter,
@@ -530,26 +556,44 @@ h2,
 /* --- System load --- */
 
 .load {
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  padding: 8px 12px;
 }
 
+/* Each cell: label and value on one line, the meter underneath. */
 .load-row {
   display: grid;
-  grid-template-columns: 3.4em 1fr minmax(5.5em, auto);
-  align-items: center;
-  gap: 12px;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "label value"
+    "meter meter";
+  align-items: baseline;
+  row-gap: 4px;
+  min-width: 0;
+}
+
+.load-row .meter {
+  grid-area: meter;
 }
 
 .load-label {
+  grid-area: label;
   font-family: var(--mono);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 500;
   text-transform: uppercase;
   color: var(--mute);
 }
 
 .load-value {
+  grid-area: value;
   text-align: right;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .warn {
@@ -797,7 +841,7 @@ h2,
 
 .trend {
   width: 100%;
-  height: 4.5em;
+  height: 2.6em;
   overflow: visible;
 }
 

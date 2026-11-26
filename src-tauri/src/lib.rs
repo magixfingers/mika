@@ -1,5 +1,6 @@
 mod alert;
 mod claude_limits;
+mod gpu;
 mod permission;
 mod sampler;
 mod settings;

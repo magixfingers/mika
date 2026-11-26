@@ -59,6 +59,8 @@ pub enum Thermal {
 pub struct SystemLoad {
     /// Average over all cores, 0..100.
     pub cpu: f32,
+    /// Busiest GPU's utilization, 0..100; None where no GPU reports one.
+    pub gpu: Option<f32>,
     pub memory_used: u64,
     pub memory_total: u64,
     /// Hottest CPU die sensor in °C; None where the Mac exposes no sensors.
@@ -101,6 +103,7 @@ impl Sampler {
         let cpu_temp = self.components.as_mut().and_then(cpu_temp);
         let system = SystemLoad {
             cpu: self.sys.global_cpu_usage(),
+            gpu: crate::gpu::utilization(),
             memory_used: self.sys.used_memory(),
             memory_total: self.sys.total_memory(),
             cpu_temp,
@@ -434,8 +437,9 @@ mod load_check {
         let l = s.sample().system;
         let gb = |b: u64| b as f64 / 1024f64.powi(3);
         println!(
-            "MIKA cpu={:.1}% ram={:.2}/{:.2}G ({:.0}%) cpu_temp={:?} thermal={:?}",
+            "MIKA cpu={:.1}% gpu={:?} ram={:.2}/{:.2}G ({:.0}%) cpu_temp={:?} thermal={:?}",
             l.cpu,
+            l.gpu,
             gb(l.memory_used),
             gb(l.memory_total),
             l.memory_used as f64 / l.memory_total as f64 * 100.0,

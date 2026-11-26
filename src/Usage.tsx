@@ -73,6 +73,9 @@ export function SystemPanel({ system }: { system: SystemLoad }) {
   return (
     <section className="panel load">
       <LoadRow label="CPU" hint="Average use across all cores" fill={system.cpu / 100} value={`${Math.round(system.cpu)}%`} />
+      {system.gpu !== null && (
+        <LoadRow label="GPU" hint="Utilization of the busiest GPU" fill={system.gpu / 100} value={`${Math.round(system.gpu)}%`} />
+      )}
       <LoadRow
         label="RAM"
         hint={`${gb(system.memory_used)} of ${gb(system.memory_total)} in use`}
@@ -110,16 +113,19 @@ export function Totals({ usage, range }: { usage: Map<string, ModelUsage>; range
   return (
     <section className="totals">
       <p className="eyebrow">{RANGE_LABELS[range]}</p>
-      <p className="total-tokens">
-        {/* Text is written by useRollingNumber, so React never fights the tween. */}
-        <span ref={rolling} />
-        <span className="total-compact">≈ {compact(tokens)}</span>
-      </p>
-      {showCost && (
-        <p className="total-cost" title="Estimated from public API list prices">
-          {formatCost(cost)} <span className="muted">est.</span>
+      {/* Tokens and cost share a line to keep the window short. */}
+      <div className="total-line">
+        <p className="total-tokens">
+          {/* Text is written by useRollingNumber, so React never fights the tween. */}
+          <span ref={rolling} />
+          <span className="total-compact">≈ {compact(tokens)}</span>
         </p>
-      )}
+        {showCost && (
+          <p className="total-cost" title="Estimated from public API list prices">
+            {formatCost(cost)} <span className="muted">est.</span>
+          </p>
+        )}
+      </div>
     </section>
   );
 }
@@ -142,17 +148,15 @@ function windowLabel(id: string): string {
 function LimitMeter({ label, used, resetsAt }: { label: string; used: number; resetsAt: number | null }) {
   const left = Math.min(100, Math.max(0, 100 - used));
   return (
-    <div className="limit">
+    <div className="limit small">
+      <span className="muted limit-label">
+        {label}
+        {resetsAt ? ` · resets in ${timeUntil(resetsAt)}` : ""}
+      </span>
       <div className="meter" style={{ "--fill": left / 100 } as React.CSSProperties}>
         <span />
       </div>
-      <div className="row small">
-        <span className="muted">
-          {label}
-          {resetsAt ? ` · resets in ${timeUntil(resetsAt)}` : ""}
-        </span>
-        <span>{left.toFixed(0)}% left</span>
-      </div>
+      <span className="limit-left num">{left.toFixed(0)}% left</span>
     </div>
   );
 }
