@@ -1,0 +1,401 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-26T21:04:28.807989+00:00",
+  "title": "Design System: Mika",
+  "extensions": {
+    "colorMeta": {
+      "signal-blue": {
+        "role": "primary",
+        "displayName": "Signal Blue",
+        "canonical": "#0070f3",
+        "tonalRamp": [
+          "#002249",
+          "#00387a",
+          "#004eaa",
+          "#0065db",
+          "#338df5",
+          "#73b0f8",
+          "#b2d4fb",
+          "#e6f1fe"
+        ]
+      },
+      "alarm-red": {
+        "role": "secondary",
+        "displayName": "Alarm Red",
+        "canonical": "#ee0000",
+        "tonalRamp": [
+          "#470000",
+          "#770000",
+          "#a70000",
+          "#d60000",
+          "#f13333",
+          "#f67373",
+          "#fab2b2",
+          "#fde6e6"
+        ]
+      },
+      "turn-violet": {
+        "role": "secondary",
+        "displayName": "Turn Violet",
+        "canonical": "#7928ca",
+        "tonalRamp": [
+          "#240c3d",
+          "#3c1465",
+          "#551c8d",
+          "#6d24b6",
+          "#9453d5",
+          "#b589e2",
+          "#d7beef",
+          "#f2eafa"
+        ]
+      },
+      "done-mint": {
+        "role": "secondary",
+        "displayName": "Done Mint",
+        "canonical": "#50e3c2",
+        "tonalRamp": [
+          "#18443a",
+          "#287261",
+          "#389f88",
+          "#48ccaf",
+          "#73e9ce",
+          "#9ff0dd",
+          "#caf7ed",
+          "#eefcf9"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#171717",
+        "tonalRamp": [
+          "#171717",
+          "#4d4d4d",
+          "#8f8f8f",
+          "#a1a1a1",
+          "#d4d4d4",
+          "#ebebeb",
+          "#f2f2f2",
+          "#fafafa"
+        ]
+      },
+      "graphite": {
+        "role": "neutral",
+        "displayName": "Graphite",
+        "canonical": "#4d4d4d",
+        "tonalRamp": [
+          "#171717",
+          "#4d4d4d",
+          "#8f8f8f",
+          "#a1a1a1",
+          "#d4d4d4",
+          "#ebebeb",
+          "#f2f2f2",
+          "#fafafa"
+        ]
+      },
+      "fog": {
+        "role": "neutral",
+        "displayName": "Fog",
+        "canonical": "#8f8f8f",
+        "tonalRamp": [
+          "#171717",
+          "#4d4d4d",
+          "#8f8f8f",
+          "#a1a1a1",
+          "#d4d4d4",
+          "#ebebeb",
+          "#f2f2f2",
+          "#fafafa"
+        ]
+      },
+      "ash": {
+        "role": "neutral",
+        "displayName": "Ash",
+        "canonical": "#a1a1a1",
+        "tonalRamp": [
+          "#171717",
+          "#4d4d4d",
+          "#8f8f8f",
+          "#a1a1a1",
+          "#d4d4d4",
+          "#ebebeb",
+          "#f2f2f2",
+          "#fafafa"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#ebebeb",
+        "tonalRamp": [
+          "#171717",
+          "#4d4d4d",
+          "#8f8f8f",
+          "#a1a1a1",
+          "#d4d4d4",
+          "#ebebeb",
+          "#f2f2f2",
+          "#fafafa"
+        ]
+      },
+      "hairline-soft": {
+        "role": "neutral",
+        "displayName": "Hairline Soft",
+        "canonical": "#f2f2f2",
+        "tonalRamp": [
+          "#171717",
+          "#4d4d4d",
+          "#8f8f8f",
+          "#a1a1a1",
+          "#d4d4d4",
+          "#ebebeb",
+          "#f2f2f2",
+          "#fafafa"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#fafafa",
+        "tonalRamp": [
+          "#171717",
+          "#4d4d4d",
+          "#8f8f8f",
+          "#a1a1a1",
+          "#d4d4d4",
+          "#ebebeb",
+          "#f2f2f2",
+          "#fafafa"
+        ]
+      },
+      "card-white": {
+        "role": "neutral",
+        "displayName": "Card White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#171717",
+          "#4d4d4d",
+          "#8f8f8f",
+          "#a1a1a1",
+          "#d4d4d4",
+          "#ebebeb",
+          "#f2f2f2",
+          "#fafafa"
+        ]
+      },
+      "switch-off": {
+        "role": "neutral",
+        "displayName": "Switch Off",
+        "canonical": "#d4d4d4",
+        "tonalRamp": [
+          "#171717",
+          "#4d4d4d",
+          "#8f8f8f",
+          "#a1a1a1",
+          "#d4d4d4",
+          "#ebebeb",
+          "#f2f2f2",
+          "#fafafa"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The token total on Overview; one per page."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The Mika wordmark."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Rows, labels, session titles; 13-15px with window width."
+      },
+      "body-small": {
+        "displayName": "Body Small",
+        "purpose": "Status line, limit rows, hints, control labels."
+      },
+      "label": {
+        "displayName": "Mono Eyebrow",
+        "purpose": "Uppercase section titles and load labels in Fog."
+      },
+      "numeral": {
+        "displayName": "Mono Numeral",
+        "purpose": "Live rates and readouts with tabular figures."
+      }
+    },
+    "shadows": [
+      {
+        "name": "glass-float",
+        "value": "0 2px 2px rgba(0,0,0,0.04), 0 8px 16px -4px rgba(0,0,0,0.08)",
+        "purpose": "Range switch and tab bar in the Classic skin, with backdrop-filter: blur(20px) saturate(180%) over rgba(255,255,255,0.6)."
+      },
+      {
+        "name": "knob",
+        "value": "0 1px 2px rgba(0,0,0,0.2)",
+        "purpose": "Toggle thumb."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-control",
+        "value": "150ms ease",
+        "purpose": "Color and background changes on controls; toggle knob."
+      },
+      {
+        "name": "ease-meter",
+        "value": "400ms ease",
+        "purpose": "Meter fills easing to new values."
+      },
+      {
+        "name": "ghost-color",
+        "value": "300ms ease",
+        "purpose": "Mika ghost cross-fading between state colors."
+      },
+      {
+        "name": "entrance",
+        "value": "GSAP power3.out, 0.55s, 0.06s stagger, y 14px",
+        "purpose": "Cards rising in on page or range change; bars fill from zero."
+      },
+      {
+        "name": "pop",
+        "value": "GSAP elastic.out(1, 0.45), 0.7s",
+        "purpose": "The ghost pops on a state change."
+      },
+      {
+        "name": "alert-shake",
+        "value": "GSAP x [0,-7,6,-4,3,-1,0], 0.55s power2.out",
+        "purpose": "Header shakes when an agent needs you."
+      },
+      {
+        "name": "alert-pulse",
+        "value": "1.2s ease-in-out infinite, opacity to 0.45",
+        "purpose": "Red status line pulse; disabled under reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "two-column",
+        "value": "760px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat white card with a hairline border and a mono eyebrow; the container for every Overview section.",
+      "html": "<section class=\"ds-card\"><h2 class=\"ds-eyebrow\">Limits</h2><div class=\"ds-limit\"><span class=\"ds-muted\">5-hour · resets in 2h 59m</span><span class=\"ds-meter\" style=\"--fill:.78\"><span></span></span><span class=\"ds-num\">78% left</span></div></section>",
+      "css": ".ds-card{font-family:'Geist Variable',Inter,Arial,sans-serif;color:#171717;background:#fff;border:1px solid #ebebeb;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;width:300px}.ds-eyebrow{margin:0;font-family:'Geist Mono Variable',ui-monospace,Menlo,monospace;font-size:11px;font-weight:500;text-transform:uppercase;color:#8f8f8f}.ds-limit{display:grid;grid-template-columns:minmax(0,1fr) 48px 4.6em;gap:8px;align-items:center;font-size:12px}.ds-muted{color:#8f8f8f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ds-num{text-align:right;font-variant-numeric:tabular-nums}.ds-meter{height:3px;border-radius:9999px;background:rgba(0,112,243,.12);overflow:hidden;display:block}.ds-meter span{display:block;height:100%;background:#0070f3;transform:scaleX(var(--fill));transform-origin:left}"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ink button for the main action in Settings.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Install</button>",
+      "css": ".ds-btn{font-family:'Geist Variable',Inter,Arial,sans-serif;height:2em;padding:0 10px;border:1px solid #ebebeb;border-radius:6px;background:#fff;color:#171717;font-size:12px;font-weight:500;cursor:pointer}.ds-btn-primary{background:#171717;border-color:#171717;color:#fff}.ds-btn:focus-visible{outline:2px solid #0070f3;outline-offset:2px}.ds-btn:disabled{opacity:.5}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "White button with a hairline for secondary actions.",
+      "html": "<button class=\"ds-btn2\">Remove</button>",
+      "css": ".ds-btn2{font-family:'Geist Variable',Inter,Arial,sans-serif;height:2em;padding:0 10px;border:1px solid #ebebeb;border-radius:6px;background:#fff;color:#171717;font-size:12px;font-weight:500;cursor:pointer}.ds-btn2:focus-visible{outline:2px solid #0070f3;outline-offset:2px}"
+    },
+    {
+      "name": "Alert Pill Buttons",
+      "kind": "button",
+      "refersTo": "pill-button",
+      "description": "The popup's answers: ink pill for Allow, white pills for the rest, ghost for back to terminal.",
+      "html": "<div class=\"ds-pills\"><button class=\"ds-pill ds-ghost\">Terminal</button><button class=\"ds-pill\">Deny</button><button class=\"ds-pill ds-pill-primary\">Allow</button></div>",
+      "css": ".ds-pills{display:flex;gap:6px}.ds-pill{font-family:'Geist Variable',Inter,Arial,sans-serif;height:2em;padding:0 14px;border:1px solid #ebebeb;border-radius:64px;background:#fff;color:#4d4d4d;font-size:12px;font-weight:500;cursor:pointer;transition:color 150ms ease,background 150ms ease}.ds-pill:hover{color:#171717}.ds-pill-primary{background:#171717;border-color:#171717;color:#fff}.ds-pill-primary:hover{color:#fff}.ds-ghost{padding:0 4px;border-color:transparent;background:transparent;color:#8f8f8f}.ds-pill:focus-visible{outline:2px solid #0070f3;outline-offset:2px}"
+    },
+    {
+      "name": "Segmented Range Switch",
+      "kind": "nav",
+      "refersTo": "segmented-selected",
+      "description": "Pill track with an ink pill under the active range.",
+      "html": "<div class=\"ds-seg\"><button aria-selected=\"true\">Day</button><button>Month</button><button>Total</button></div>",
+      "css": ".ds-seg{display:inline-flex;gap:2px;padding:4px;border-radius:64px;border:1px solid #ebebeb;background:rgba(255,255,255,.6);box-shadow:0 2px 2px rgba(0,0,0,.04),0 8px 16px -4px rgba(0,0,0,.08)}.ds-seg button{font-family:'Geist Variable',Inter,Arial,sans-serif;border:0;background:none;height:2.1em;padding:0 9px;border-radius:64px;font-size:12px;font-weight:500;color:#4d4d4d;cursor:pointer;transition:background 150ms ease,color 150ms ease}.ds-seg button:hover{color:#171717}.ds-seg button[aria-selected=\"true\"]{background:#171717;color:#fff}.ds-seg button:focus-visible{outline:2px solid #0070f3;outline-offset:2px}"
+    },
+    {
+      "name": "Toggle",
+      "kind": "custom",
+      "refersTo": "toggle-on",
+      "description": "Grey track, ink when on, white knob.",
+      "html": "<button class=\"ds-toggle\" role=\"switch\" aria-checked=\"true\"></button> <button class=\"ds-toggle\" role=\"switch\" aria-checked=\"false\"></button>",
+      "css": ".ds-toggle{position:relative;width:36px;height:20px;border:0;border-radius:9999px;background:#d4d4d4;cursor:pointer;transition:background 150ms ease}.ds-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform 150ms ease}.ds-toggle[aria-checked=\"true\"]{background:#171717}.ds-toggle[aria-checked=\"true\"]::after{transform:translateX(16px)}.ds-toggle:focus-visible{outline:2px solid #0070f3;outline-offset:2px}"
+    },
+    {
+      "name": "System Load Grid",
+      "kind": "custom",
+      "refersTo": "meter",
+      "description": "2x2 grid of mono label, value and a 3px meter: CPU, GPU, RAM, Temp.",
+      "html": "<div class=\"ds-load\"><div class=\"ds-cell\"><span class=\"ds-l\">CPU</span><span class=\"ds-v\">12%</span><span class=\"ds-m\" style=\"--fill:.12\"><span></span></span></div><div class=\"ds-cell\"><span class=\"ds-l\">GPU</span><span class=\"ds-v\">30%</span><span class=\"ds-m\" style=\"--fill:.3\"><span></span></span></div><div class=\"ds-cell\"><span class=\"ds-l\">RAM</span><span class=\"ds-v\">28%</span><span class=\"ds-m\" style=\"--fill:.28\"><span></span></span></div><div class=\"ds-cell\"><span class=\"ds-l\">Temp</span><span class=\"ds-v\">46°C</span><span class=\"ds-m\" style=\"--fill:.46\"><span></span></span></div></div>",
+      "css": ".ds-load{font-family:'Geist Variable',Inter,Arial,sans-serif;color:#171717;display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;padding:8px 12px;width:300px;background:#fff;border:1px solid #ebebeb;border-radius:10px}.ds-cell{display:grid;grid-template-columns:auto 1fr;grid-template-areas:'l v' 'm m';row-gap:4px;align-items:baseline}.ds-l{grid-area:l;font-family:'Geist Mono Variable',ui-monospace,Menlo,monospace;font-size:10px;font-weight:500;text-transform:uppercase;color:#8f8f8f}.ds-v{grid-area:v;text-align:right;font-size:12px;font-variant-numeric:tabular-nums}.ds-m{grid-area:m;display:block;height:3px;border-radius:9999px;background:rgba(0,112,243,.12);overflow:hidden}.ds-m span{display:block;height:100%;background:#0070f3;transform:scaleX(var(--fill));transform-origin:left}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Instrument",
+    "overview": "Mika is a gauge on the desk, not a dashboard on the wall. It is read in a glance and then put away, so everything at rest is ink and grey on near-white paper: hairline cards, mono eyebrows, tabular numbers. Nothing competes for attention while the agents are fine. When something changes, the instrument speaks through exactly two channels: the color of the Mika ghost and the status line beside it. Red means one thing only, an agent is blocked on you.\n\nThe system descends from Vercel's Geist language: Geist Sans for reading, Geist Mono for labels and figures, a flat paper-and-hairline surface, and pill-shaped ink selections. Density is high but calm. The window is small (360pt wide by default) and shows all of Overview without scrolling, so spacing is tight and every row earns its place. Personality lives in the ghost and in motion (springy pops, a shake on alert, bars that fill on entrance), never in decoration.\n\nA second skin, Liquid Glass, replaces the paper with a WebGPU-rendered glass scene; the cards lose their fill and border and are drawn as glass. Both skins share every token below; only the surface material changes.",
+    "keyCharacteristics": [
+      "Ink on paper at rest; color appears only for agent state and data.",
+      "Flat surfaces with hairline borders; no shadows on cards.",
+      "Geist Sans for text, Geist Mono for eyebrows, rates and figures, tabular numerals everywhere numbers change.",
+      "Ink pills mark the selected option in every segmented control.",
+      "Compact: the whole Overview fits one small window.",
+      "The Mika ghost is the only illustrative element."
+    ],
+    "rules": [
+      {
+        "name": "The State-Only Rule",
+        "body": "Color always means an agent state or a data value. Chrome (buttons, tabs, cards, icons) stays ink, grey and white. If a new element wants color, it must be showing a state or a number.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Red Rule",
+        "body": "Alarm Red is reserved for \"needs you\" and genuine danger. A \"your turn\" handback is violet, a finished agent is mint, and an error that doesn't need the user right now is not red.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Every number that updates live uses tabular figures (font-variant-numeric: tabular-nums) so values change in place without shifting the layout.",
+        "section": "typography"
+      },
+      {
+        "name": "The Mono Eyebrow Rule",
+        "body": "Section titles are small uppercase Geist Mono in Fog, never large bold headings. The data is the headline.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Card Rule",
+        "body": "Cards never cast shadows. Only floating controls (range switch, tab bar) and the Liquid Glass skin get depth.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep chrome in Ink, Graphite, Fog and Card White; use color only for agent state and data values.",
+      "Do reserve Alarm Red (#ee0000) for \"needs you\" and genuinely dangerous commands.",
+      "Do label sections with small uppercase Geist Mono eyebrows in Fog (0.78rem, 500).",
+      "Do use tabular figures for every live number.",
+      "Do mark the selected option with an Ink pill and white text.",
+      "Do give cards a 1px Hairline (#ebebeb) border, 10px radius and no shadow.",
+      "Do keep Overview short enough to fit the window without scrolling; prefer one-line rows.",
+      "Do use the 2px Signal Blue focus ring with 2px offset on every interactive element.",
+      "Do keep both skins working: any new surface must read on paper and on Liquid Glass."
+    ],
+    "donts": [
+      "Don't use color for decoration, emphasis or branding outside the ghost and data.",
+      "Don't use red for \"your turn\" or \"done\"; those are violet and mint.",
+      "Don't add shadows to cards or lists.",
+      "Don't use large bold section headings; the data is the headline.",
+      "Don't add illustrations, icons-as-decoration or a second mascot; the Mika ghost is the only character.",
+      "Don't let a new card push Overview past the window height."
+    ]
+  }
+}
