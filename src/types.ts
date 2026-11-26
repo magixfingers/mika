@@ -27,6 +27,8 @@ export type Thermal = "normal" | "fair" | "serious" | "critical" | "unknown";
 
 export interface SystemLoad {
   cpu: number;
+  /** Busiest GPU's utilization, 0..100; null where no GPU reports one. */
+  gpu: number | null;
   memory_used: number;
   memory_total: number;
   /** Hottest CPU die sensor in °C; null where the Mac exposes none. */
